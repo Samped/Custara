@@ -1,120 +1,227 @@
-# Custara — B2B Finance Agent (Enterprise)
+# Custara
 
-Privacy-first, embeddable AI finance operations platform for companies and fintechs:
+Custara is an accounts-payable workbench for B2B teams. It takes invoices from email, upload, CSV, or API, runs extraction and risk checks, applies a versioned approval policy, and can move money through Arc USDC (Circle) or a Nigeria bank export file.
 
-- Invoice intelligence with confidence + risk evidence
-- Versioned policy engine and maker-checker approvals
-- Encrypted beneficiary details + append-only audit
-- Durable async pipeline jobs
-- Accounting export + Nigeria payment partner sandbox
-- Partner API with scopes, rate limits, and idempotency
+This repo is the full app: console, Partner API, background worker, and Postgres schema.
 
-## Architecture
+**Status:** usable for design-partner pilots in sandbox. Not a SOC 2–certified primary ledger for large enterprises yet — see [docs/soc2-roadmap.md](docs/soc2-roadmap.md).
 
-- **App:** Next.js App Router + TypeScript
-- **DB:** PostgreSQL (Prisma)
-- **Jobs:** DB-backed durable queue (`BackgroundJob`) + worker process
-- **Optional infra:** Redis/BullMQ + Docker Compose for production deploys
-- **Security:** AES-256-GCM field encryption, httpOnly sessions, RBAC, API scopes
+---
 
-```bash
-# Production-shaped local stack
-npm run db:up      # embedded Postgres (terminal 1)
-npx prisma db push
-npm run db:seed
-npm run worker     # invoice pipeline worker (terminal 2)
-npm run dev        # console + API (terminal 3)
+## What it does
+
+```
+ingest → extract → risk → policy → (approve) → pay timing → payment intent → Arc / NG export → reconcile
 ```
 
-Or with Docker:
+| Area | Details |
+|------|---------|
+| Ingest | Upload, CSV, org ingest email, mailbox webhook, SFTP drop, FIRS e-invoice, ERP adapters, vendor portal |
+| Controls | Versioned policies, maker-checker approvals, MFA (incl. pay step-up in live), destination allowlist, spend caps |
+| Money | Arc USDC via Circle agent wallet; Nigeria rail is export/sandbox unless partner live is enabled |
+| Audit | Hash-chained events, request IDs, SIEM export |
+| API | Scoped keys, idempotency, rate limits — `GET /api/openapi` |
+
+Auto-pay exists but starts **off**. Live payment mode applies stricter policy defaults and requires webhook secrets / step-up on initiate.
+
+---
+
+## Stack
+
+- [Next.js](https://nextjs.org/) (App Router) + TypeScript
+- [PostgreSQL](https://www.postgresql.org/) via [Prisma](https://www.prisma.io/)
+- [Redis](https://redis.io/) + [BullMQ](https://docs.bullmq.io/) for the worker
+- [Circle](https://www.circle.com/) programmable wallets (Arc USDC + optional email OTP)
+- Local disk or S3 for documents
+
+---
+
+## Requirements
+
+- Node 20+
+- Postgres 16 (embedded helper or Docker)
+- Redis 7 (required for the worker)
+
+---
+
+## Quick start
 
 ```bash
+git clone https://github.com/Samped/Custara.git
+cd Custara
+cp .env.example .env
+npm install
+```
+
+**Terminal 1 — database**
+
+```bash
+# Option A: embedded Postgres on :54329 (matches .env.example)
+npm run db:up
+
+# Option B: Docker Compose (Postgres :5432 + Redis :6379)
 docker compose up -d
-# set DATABASE_URL=postgresql://custara:custara@127.0.0.1:5432/custara
-npx prisma db push && npm run db:seed
+# then set DATABASE_URL=postgresql://custara:custara@127.0.0.1:5432/custara in .env
+```
+
+**Migrate + seed**
+
+```bash
+npx prisma db push
+npm run db:seed
+```
+
+**Terminal 2 — Redis + worker** (skip Redis if Compose already started it)
+
+```bash
+redis-server   # if not using docker compose
 npm run worker
+```
+
+**Terminal 3 — app**
+
+```bash
 npm run dev
 ```
 
-## Demo access
+Open [http://localhost:3000](http://localhost:3000).
+
+Seed users (email OTP / Circle OTP depending on env):
 
 | Email | Role |
-|---|---|
-| admin@custara.demo | admin |
-| approver@custara.demo | approver |
-| approver2@custara.demo | approver (dual control) |
-| payer@custara.demo | payer |
-| auditor@custara.demo | auditor |
+|-------|------|
+| `admin@custara.demo` | admin |
+| `approver@custara.demo` | approver |
+| `approver2@custara.demo` | approver (dual control) |
+| `payer@custara.demo` | payer |
+| `auditor@custara.demo` | auditor |
 
-**Login is Circle email OTP** (user-controlled wallet). Set `CIRCLE_API_KEY` + `CIRCLE_APP_ID` / `NEXT_PUBLIC_CIRCLE_APP_ID`, and configure SMTP in the Circle Console so Circle can email codes. After login, Custara links the Circle wallet as treasury and provisions the agent wallet for invoice payments.
+API key material is written by seed (see seed output / local credentials file under `storage/` when present).
 
-API key: printed by seed / `storage/DEMO_CREDENTIALS.txt`
+Health: `GET /api/health`
 
-## Enterprise console
+---
 
-- `/app` Unified dashboard (KPIs, cash, pending, integrations)
-- `/app/inbox` Invoice inbox
-- `/app/onboarding` Company registration
-- `/app/approvals` Maker-checker deck
-- `/app/policies` Versioned policy publish + simulator
-- `/app/connectors` Accounting CSV/Xero export + Nigeria rail
-- `/app/settings` Privacy, payment mode, SSO posture
-- `/app/developers` **API keys, webhooks, curl guide, OpenAPI**
-- `/app/audit` Append-only trail with request IDs
+## Configuration
 
-## Integrate your company systems
+Copy [`.env.example`](.env.example). Minimum for local:
 
-1. Sign in → register company → open **API & guide** (`/app/developers`)
-2. Generate a scoped API key (Bearer `cst_live_…`)
-3. Ingest invoices:
-   - `POST /api/v1/invoices` (ERP) with `Idempotency-Key`
-   - `POST /api/v1/invoices/bulk` (CSV)
-   - Inbox UI upload (JSON / PDF / CSV)
-   - Email: forward attachments to org ingest address, or IMAP on **Connectors**, or `POST /api/ingest/mailbox`
-4. Register a webhook URL (`invoice.ingested`, approvals, payments)
-5. Optional: Xero / Nigeria payment connectors
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Postgres |
+| `REDIS_URL` | Worker queues |
+| `SESSION_SECRET` | Session cookies (≥16 chars) |
+| `ENCRYPTION_KEY` | Field encryption for bank details / webhook secrets |
 
-Machine-readable contract: `GET /api/openapi`
+Auth:
+
+- **Circle user OTP** — set `CIRCLE_API_KEY` + `CIRCLE_APP_ID` / `NEXT_PUBLIC_CIRCLE_APP_ID` (Circle sends the email).
+- **Local email OTP** — if Circle App ID is unset, configure `RESEND_API_KEY` + `EMAIL_FROM` (or SMTP_*).
+
+Payments:
+
+- Arc: Circle developer-controlled wallet keys + `CIRCLE_WEBHOOK_SECRET` (required in production).
+- Nigeria live bank movement stays gated behind `NIGERIA_PAYMENT_LIVE=true`.
+
+Optional: OIDC (`OIDC_*`), Xero/QBO/Sage/Zoho, mailbox/SFTP/WhatsApp, S3 storage — all documented in `.env.example`.
+
+---
+
+## Console map
+
+| Path | Purpose |
+|------|---------|
+| `/app` | Ops overview |
+| `/app/inbox` | Ingest and triage |
+| `/app/approvals` | Maker-checker |
+| `/app/policies` | Publish / simulate rules |
+| `/app/wallets` | Treasury + agent wallet |
+| `/app/payments` | Payment intents |
+| `/app/cash` | Obligations and suggested pays |
+| `/app/collections` | Thin AR / dunning |
+| `/app/connectors` | Ready ingest paths |
+| `/app/developers` | Keys, webhooks, curl |
+| `/app/settings` | Org, MFA, live/sandbox |
+| `/app/audit` | Audit trail |
+
+---
+
+## Partner API
+
+Bearer API keys (`cst_live_…`). Prefer `Idempotency-Key` on writes. Live payments may require `X-Custara-Step-Up`.
 
 ```bash
-export KEY=...
+export KEY=cst_live_…
 
-# Single invoice (sync analyze)
 curl -s http://localhost:3000/api/v1/invoices \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: inv-demo-1" \
-  -d '{"external_id":"inv_100","sync":true,"document":{"vendor_name":"Acme","invoice_number":"INV-100","total_amount":250000,"currency":"NGN"}}'
-
-# Bulk CSV
-curl -s http://localhost:3000/api/v1/invoices/bulk \
-  -H "Authorization: Bearer $KEY" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: bulk-1" \
-  -d '{"sync":true,"csv":"vendor_name,invoice_number,total_amount,currency\nAcme,INV-2,10000,NGN\n"}'
-
-curl -s http://localhost:3000/api/v1/payment-intents \
-  -H "Authorization: Bearer $KEY" \
-  -H "Idempotency-Key: pay-100" \
-  -H "Content-Type: application/json" \
-  -d '{"invoice_id":"...","rail":"nigeria_sandbox"}'
+  -H "Idempotency-Key: inv-1" \
+  -d '{
+    "external_id": "inv_100",
+    "sync": true,
+    "document": {
+      "vendor_name": "Acme Supplies",
+      "invoice_number": "INV-100",
+      "total_amount": 250000,
+      "currency": "NGN"
+    }
+  }'
 ```
 
-Env for email ingest: `MAILBOX_INBOUND_SECRET`, optional `INGEST_EMAIL_DOMAIN`.
+Full surface: [http://localhost:3000/api/openapi](http://localhost:3000/api/openapi)
 
-## Security defaults
+ERP shape notes: [docs/erp-adapters.md](docs/erp-adapters.md)
 
-- Bank account numbers encrypted at rest (AES-GCM); UI shows last4 only
-- Separation of powers: approver ≠ payer via RBAC + API scopes
-- Payment mode defaults to **sandbox**; live requires org setting + `NIGERIA_PAYMENT_LIVE=true`
-- Privacy Mode enabled by default with retention window
-- Security headers middleware + request IDs
+---
 
-## Still staged for full enterprise rollout
+## Tests
 
-- Production OIDC SSO login UI wiring
-- Licensed live bank partner credentials
-- SOC 2 evidence pack / pen test
-- Multi-region HA Postgres
+```bash
+npm test          # tenant isolation + policy money controls
+npx tsc --noEmit
+```
 
-These are operational/compliance steps on top of this production-shaped codebase.
+CI runs on PRs (typecheck + tests). Lint is present but some existing rules still fail clean.
+
+---
+
+## Repo layout
+
+```
+src/app/          # Next.js routes (console + API)
+src/domain/       # Business logic (pipeline, payments, Arc, connectors)
+src/lib/          # Auth, crypto, jobs, audit, storage
+src/worker.ts     # BullMQ consumers + scheduled jobs
+prisma/           # Schema + seed
+tests/            # Node test runner
+docs/             # ERP adapters, SOC 2 roadmap
+```
+
+---
+
+## Security notes (honest)
+
+- Bank account numbers and webhook signing secrets are encrypted at rest (AES-256-GCM).
+- Production disables JIT org creation unless `ALLOW_JIT_ORG_CREATION=true`.
+- SSO users must be invited first; OIDC is supported, SCIM/SAML are not.
+- Destination screening defaults to allowlist-only; optional HTTP screener via `SCREENING_PROVIDER`.
+- Nigeria fiat is file export unless a licensed partner live flag is set.
+
+---
+
+## What’s still open
+
+- SOC 2 Type I/II and a third-party pen test
+- KYC/KYB + a sanctions vendor of record (plug-in exists; no VoR baked in)
+- SCIM / SAML
+- Multi-region HA story beyond a single Redis URL
+- Full AR product depth (collections today are thin)
+
+Tracked in [docs/soc2-roadmap.md](docs/soc2-roadmap.md).
+
+---
+
+## License
+
+Proprietary for now — no open-source license is published in this repository. Contact the maintainers before redistributing.

@@ -1,0 +1,68 @@
+import { prisma } from "@/lib/db";
+import { loadPolicyRules } from "@/domain/policy";
+import { assertDestinationAllowed, assertSpendLimits } from "@/domain/arc/allowlist";
+import { screenDestination } from "@/domain/screening";
+
+/**
+ * Pay-time re-checks before creating/executing a payment intent.
+ * Fail closed on hard risks, allowlist, confidence, agent balance, and spend limits.
+ */
+export async function assertPayTimeGuards(input: {
+  organizationId: string;
+  invoiceId: string;
+  rail: string;
+  amount: number;
+  currency: string;
+  arcAddress?: string | null;
+}) {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: input.invoiceId, organizationId: input.organizationId },
+    include: {
+      extraction: true,
+      risks: true,
+    },
+  });
+  if (!invoice) throw new Error("Invoice not found for pay-time guards");
+
+  const hard = invoice.risks.filter((r) => r.severity === "hard");
+  if (hard.length) {
+    throw new Error(
+      `Pay blocked: hard risks still present (${hard.map((r) => r.code).join(", ")})`,
+    );
+  }
+
+  const rules = await loadPolicyRules(input.organizationId);
+  const floor = rules.minConfidenceForAutoApprove ?? 0.6;
+  const confidence = invoice.extraction?.confidence ?? 0;
+  if (confidence < floor) {
+    throw new Error(
+      `Pay blocked: extraction confidence ${confidence.toFixed(2)} below floor ${floor}`,
+    );
+  }
+
+  if (input.rail === "arc_usdc") {
+    const addr = input.arcAddress;
+    if (!addr) throw new Error("Pay blocked: Arc destination missing");
+    await assertDestinationAllowed(input.organizationId, addr);
+    await screenDestination({
+      organizationId: input.organizationId,
+      address: addr,
+      context: "pre_pay",
+    });
+    await assertSpendLimits(input.organizationId, input.amount);
+
+    const agent = await prisma.orgWallet.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        role: "agent",
+        status: "active",
+      },
+    });
+    if (!agent) throw new Error("Pay blocked: agent wallet not provisioned");
+    if (agent.balanceUsdc != null && agent.balanceUsdc < input.amount) {
+      throw new Error(
+        `Pay blocked: agent wallet balance ${agent.balanceUsdc} USDC < ${input.amount}`,
+      );
+    }
+  }
+}

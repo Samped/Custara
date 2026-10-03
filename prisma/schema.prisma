@@ -1,0 +1,653 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  legalName         String?
+  businessType      String?  // company | startup | sole_trader | nonprofit | other
+  industry          String?
+  country           String?
+  website           String?
+  onboardingCompletedAt DateTime?
+  privacyMode       Boolean  @default(true)
+  privacyDeleteDays Int      @default(30)
+  expectedInflow7d  Float    @default(0)
+  expectedInflow30d Float    @default(0)
+  paymentMode       String   @default("sandbox") // sandbox | live
+  ssoEnforced       Boolean  @default(false)
+  mfaRequiredForRoles String @default("[\"admin\",\"payer\",\"approver\"]")
+  agentWalletFrozen Boolean  @default(false)
+  dailySpendLimitUsd Float   @default(250000)
+  ingestEmail       String?  @unique // e.g. invoices+acme@ingest.custara.xyz
+  autoPayEnabled    Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  users               WorkspaceUser[]
+  vendors             Vendor[]
+  invoices            Invoice[]
+  policies            ApprovalPolicy[]
+  approvalRequests    ApprovalRequest[]
+  paymentIntents      PaymentIntent[]
+  settlements         Settlement[]
+  auditEvents         AuditEvent[]
+  apiKeys             ApiKey[]
+  webhooks            WebhookEndpoint[]
+  connectors          IntegrationConnector[]
+  idempotencyRecords  IdempotencyRecord[]
+  jobs                BackgroundJob[]
+  wallets             OrgWallet[]
+  agentTasks          AgentTask[]
+  walletChallenges    WalletLinkChallenge[]
+  destinationAllowlist DestinationAllowlist[]
+  vendorPortalInvites VendorPortalInvite[]
+  purchaseOrders      VendorPurchaseOrder[]
+  customers           Customer[]
+  receivables         Receivable[]
+}
+
+model WorkspaceUser {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  name           String
+  passwordHash   String?
+  role           String // admin | approver | payer | viewer | auditor
+  ssoSubject     String?
+  mfaEnabled     Boolean   @default(false)
+  mfaSecretEnc   String?
+  mfaVerifiedAt  DateTime?
+  lastLoginAt    DateTime?
+  disabledAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  approvals    ApprovalRequest[] @relation("ApproverDecisions")
+  decisions    ApprovalDecision[]
+  sessions     Session[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, role])
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  userId           String
+  tokenHash        String   @unique
+  expiresAt        DateTime
+  ip               String?
+  userAgent        String?
+  createdAt        DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
+
+  user WorkspaceUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Sandbox / local email OTP when Circle user-auth is not configured.
+model LoginChallenge {
+  id          String    @id @default(cuid())
+  email       String
+  codeHash    String
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  attempts    Int       @default(0)
+  ip          String?
+  createdAt   DateTime  @default(now())
+
+  @@index([email, expiresAt])
+}
+
+model Vendor {
+  id             String   @id @default(cuid())
+  organizationId String
+  externalId     String?
+  name           String
+  email          String?
+  taxId          String?
+  isNew          Boolean  @default(true)
+  riskTier       String   @default("standard")
+  earlyPayDiscountPct Float?
+  earlyPayDays   Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  endpoints    VendorPaymentEndpoint[]
+  invoices     Invoice[]
+  portalInvites VendorPortalInvite[]
+  purchaseOrders VendorPurchaseOrder[]
+
+  @@index([organizationId, name])
+  @@unique([organizationId, externalId])
+}
+
+model VendorPaymentEndpoint {
+  id                     String   @id @default(cuid())
+  vendorId               String
+  version                Int      @default(1)
+  endpointType           String   @default("bank") // bank | arc_usdc
+  bankName               String?
+  accountName            String
+  accountNumberEncrypted String   @default("")
+  accountNumberLast4     String   @default("")
+  bankCode               String?
+  arcAddress             String?
+  currency               String   @default("NGN")
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId, isActive])
+}
+
+// Light PO / contract line for invoice validation (amount + vendor match).
+model VendorPurchaseOrder {
+  id             String   @id @default(cuid())
+  organizationId String
+  vendorId       String
+  poNumber       String
+  amount         Float?
+  currency       String   @default("NGN")
+  label          String?
+  status         String   @default("open") // open | closed
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor       Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, poNumber])
+  @@index([vendorId, status])
+}
+
+// Thin AR — customers who owe the org (receivables).
+model Customer {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  email          String?
+  externalId     String?
+  behaviorScore  Float    @default(50) // 0-100; higher = pays faster / more reliable
+  avgDaysToPay   Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  receivables  Receivable[]
+
+  @@index([organizationId, name])
+  @@unique([organizationId, externalId])
+}
+
+model Receivable {
+  id             String    @id @default(cuid())
+  organizationId String
+  customerId     String
+  invoiceNumber  String?
+  amount         Float
+  currency       String    @default("NGN")
+  issueDate      DateTime?
+  dueDate        DateTime?
+  status         String    @default("open") // open | partially_paid | paid | written_off
+  priority       Int       @default(50) // higher = chase sooner
+  lastReminderAt DateTime?
+  reminderCount  Int       @default(0)
+  paidAt         DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, dueDate])
+  @@index([customerId, status])
+}
+
+model OrgWallet {
+  id                String    @id @default(cuid())
+  organizationId    String
+  role              String // treasury_external | agent
+  provider          String // external | circle | circle_user | sandbox
+  blockchain        String    @default("ARC-TESTNET")
+  address           String
+  circleWalletId    String?
+  circleWalletSetId String?
+  status            String    @default("active") // pending | active | frozen | revoked
+  label             String?
+  balanceUsdc       Float?
+  balanceSyncedAt   DateTime?
+  verifiedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, role, address])
+  @@index([organizationId, role])
+  @@index([circleWalletId])
+}
+
+model WalletLinkChallenge {
+  id             String   @id @default(cuid())
+  organizationId String
+  nonce          String   @unique
+  message        String
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, expiresAt])
+}
+
+model AgentTask {
+  id              String    @id @default(cuid())
+  organizationId  String
+  type            String // arc_transfer | arc_reconcile | wallet_sync
+  status          String    @default("pending") // pending | running | completed | failed | cancelled
+  paymentIntentId String?
+  payloadJson     String    @default("{}")
+  circleTxId      String?
+  txHash          String?
+  error           String?
+  attempts        Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  completedAt     DateTime?
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paymentIntent PaymentIntent? @relation(fields: [paymentIntentId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([paymentIntentId])
+  @@index([circleTxId])
+}
+
+model DestinationAllowlist {
+  id             String    @id @default(cuid())
+  organizationId String
+  address        String
+  label          String?
+  vendorId       String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, address])
+  @@index([organizationId, isActive])
+}
+
+model Invoice {
+  id               String    @id @default(cuid())
+  organizationId   String
+  vendorId         String?
+  externalId       String?
+  status           String    @default("received")
+  currency         String    @default("NGN")
+  invoiceNumber    String?
+  issueDate        DateTime?
+  dueDate          DateTime?
+  subtotal         Float?
+  taxAmount        Float?
+  totalAmount      Float?
+  poNumber         String?
+  source           String    @default("upload")
+  explanation      String?
+  policyVersionId  String?
+  requestId        String?
+  recommendedPayDate DateTime?
+  payTimingReason  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor           Vendor?           @relation(fields: [vendorId], references: [id])
+  documents        InvoiceDocument[]
+  extraction       ExtractionResult?
+  risks            RiskAssessment[]
+  approvalRequests ApprovalRequest[]
+  paymentIntents   PaymentIntent[]
+  settlements      Settlement[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, invoiceNumber])
+  @@index([organizationId, recommendedPayDate])
+  @@unique([organizationId, externalId])
+}
+
+model InvoiceDocument {
+  id            String    @id @default(cuid())
+  invoiceId     String
+  filename      String
+  mimeType      String
+  storagePath   String
+  byteSize      Int
+  checksumSha256 String?
+  retainedUntil DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model ExtractionResult {
+  id            String   @id @default(cuid())
+  invoiceId     String   @unique
+  confidence    Float
+  vendorName    String?
+  invoiceNumber String?
+  issueDate     String?
+  dueDate       String?
+  currency      String?
+  subtotal      Float?
+  taxAmount     Float?
+  totalAmount   Float?
+  poNumber      String?
+  accountName   String?
+  accountNumberEncrypted String?
+  accountNumberLast4 String?
+  bankName      String?
+  bankCode      String?
+  lineItemsJson String   @default("[]")
+  rawJson       String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model RiskAssessment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  code      String
+  severity  String
+  message   String
+  evidenceJson String @default("{}")
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model ApprovalPolicy {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions     ApprovalPolicyVersion[]
+
+  @@index([organizationId, isActive])
+}
+
+model ApprovalPolicyVersion {
+  id         String   @id @default(cuid())
+  policyId   String
+  version    Int
+  rulesJson  String
+  changelog  String?
+  createdBy  String?
+  createdAt  DateTime @default(now())
+
+  policy ApprovalPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@unique([policyId, version])
+}
+
+model ApprovalRequest {
+  id             String    @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  status         String    @default("pending")
+  requiredCount  Int       @default(1)
+  approvedCount  Int       @default(0)
+  reason         String?
+  policyVersion  Int?
+  decidedById    String?
+  decidedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  decidedBy    WorkspaceUser?     @relation("ApproverDecisions", fields: [decidedById], references: [id])
+  decisions    ApprovalDecision[]
+
+  @@index([organizationId, status])
+}
+
+model ApprovalDecision {
+  id         String   @id @default(cuid())
+  approvalId String
+  userId     String
+  decision   String // approved | rejected
+  note       String?
+  createdAt  DateTime @default(now())
+
+  approval ApprovalRequest @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  user     WorkspaceUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([approvalId, userId])
+  @@index([approvalId])
+}
+
+model PaymentIntent {
+  id              String   @id @default(cuid())
+  organizationId  String
+  invoiceId       String
+  idempotencyKey  String
+  status          String   @default("created")
+  rail            String   @default("arc_usdc") // arc_usdc | nigeria_sandbox | nigeria_export
+  amount          Float
+  currency        String
+  beneficiaryJson String
+  exportPath      String?
+  providerRef     String?
+  failureReason   String?
+  mode            String   @default("sandbox")
+  circleTxId      String?
+  txHash          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  settlements  Settlement[]
+  agentTasks   AgentTask[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status])
+  @@index([circleTxId])
+}
+
+model Settlement {
+  id              String   @id @default(cuid())
+  organizationId  String
+  invoiceId       String
+  paymentIntentId String?
+  amount          Float
+  currency        String
+  reference       String?
+  settledAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  paymentIntent PaymentIntent? @relation(fields: [paymentIntentId], references: [id])
+}
+
+model AuditEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorType      String
+  actorId        String?
+  action         String
+  entityType     String
+  entityId       String?
+  requestId      String?
+  metadataJson   String   @default("{}")
+  prevHash       String?
+  entryHash      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action])
+  @@index([organizationId, entryHash])
+}
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  keyPrefix      String
+  keyHash        String
+  scopesJson     String
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([keyPrefix])
+}
+
+model WebhookEndpoint {
+  id             String   @id @default(cuid())
+  organizationId String
+  url            String
+  secret         String
+  eventsJson     String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id             String    @id @default(cuid())
+  endpointId     String
+  event          String
+  payloadJson    String
+  statusCode     Int?
+  success        Boolean   @default(false)
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(8)
+  nextAttemptAt  DateTime?
+  lastError      String?
+  deadLetteredAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@index([success, deadLetteredAt, nextAttemptAt])
+}
+
+model IntegrationConnector {
+  id             String    @id @default(cuid())
+  organizationId String
+  type           String // accounting_xero | accounting_csv | payment_nigeria | mailbox_imap | whatsapp_business | sftp_drop | einvoice_firs | banking_* | accounting_qbo | accounting_sage | accounting_zoho
+  name           String
+  status         String    @default("disconnected") // disconnected | connected | error
+  configJson     String    @default("{}")
+  secretsJson    String    @default("{}")
+  lastSyncAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type])
+}
+
+// Magic-link invites for vendor self-serve invoice upload (no workspace login).
+model VendorPortalInvite {
+  id             String    @id @default(cuid())
+  organizationId String
+  vendorId       String?
+  email          String
+  tokenHash      String    @unique
+  label          String?
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor       Vendor?     @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, email])
+  @@index([expiresAt])
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  key            String
+  requestHash    String
+  responseJson   String
+  statusCode     Int
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([expiresAt])
+}
+
+model BackgroundJob {
+  id             String    @id @default(cuid())
+  organizationId String?
+  queue          String
+  name           String
+  payloadJson    String
+  status         String    @default("pending") // pending | active | completed | failed
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  runAt          DateTime  @default(now())
+  lockedAt       DateTime?
+  completedAt    DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAt])
+  @@index([queue, status])
+}
+
+model ApiRateLimit {
+  id        String   @id @default(cuid())
+  bucket    String
+  windowStart DateTime
+  count     Int      @default(0)
+
+  @@unique([bucket, windowStart])
+  @@index([windowStart])
+}

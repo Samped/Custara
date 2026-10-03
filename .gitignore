@@ -1,0 +1,87 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+Thumbs.db
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env / secrets (keep .env.example shareable)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+credentials.json
+service-account*.json
+**/secrets/
+*.secret
+*.secrets
+
+# vercel / deploy
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# local data / runtime
+/data
+/storage
+/prisma/*.db
+/prisma/*.db-journal
+/*.db
+/*.db-journal
+dump.rdb
+*.sqlite
+*.sqlite3
+
+# AI agent / assistant artifacts (do not publish)
+AGENTS.md
+CLAUDE.md
+AGENT.md
+GEMINI.md
+.cursorrules
+.cursor/
+.claude/
+.codex/
+.aider*
+.gpt/
+.continue/
+.windsurf/
+.trae/
+.copilot/
+copilot/
+.ai/
+*.agent.md
+
+# editor / OS noise
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example

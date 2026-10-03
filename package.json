@@ -1,0 +1,62 @@
+{
+  "name": "custara",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "postinstall": "prisma generate",
+    "db:up": "tsx scripts/embedded-pg.ts",
+    "worker": "tsx src/worker.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "dev:all": "echo 'Run: npm run db:up (terminal 1), redis + npm run worker (terminal 2), npm run dev (terminal 3)'"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1145.0",
+    "@aws-sdk/s3-request-presigner": "^3.1145.0",
+    "@circle-fin/developer-controlled-wallets": "^10.8.1",
+    "@circle-fin/w3s-pw-web-sdk": "^1.1.11",
+    "@prisma/client": "^5.22.0",
+    "bullmq": "^6.3.11",
+    "firebase": "^10.12.1",
+    "imapflow": "^2.2.1",
+    "ioredis": "^6.0.0",
+    "jose": "^6.2.12",
+    "nanoid": "^6.0.1",
+    "next": "16.3.8",
+    "nodemailer": "^10.0.13",
+    "otplib": "^13.5.0",
+    "pdf-parse": "^2.4.5",
+    "pg-boss": "^12.35.1",
+    "qrcode": "^1.5.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "siwe": "^3.0.0",
+    "ssh2-sftp-client": "^12.1.1",
+    "viem": "^2.57.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/ssh2-sftp-client": "^9.0.6",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.8",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@embedded-postgres/linux-x64": "^18.4.0-beta.17"
+  }
+}

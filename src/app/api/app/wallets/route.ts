@@ -5,14 +5,18 @@ import { writeAudit } from "@/lib/audit";
 import {
   createTreasuryLinkChallenge,
   ensureAgentWallet,
+  fundAgentTestnet,
   linkTreasuryAddressManual,
   syncWalletBalances,
+  upgradeAgentWalletToCircle,
   verifyAndLinkTreasuryWallet,
 } from "@/domain/arc/wallets";
 import { addDestination, revokeDestination } from "@/domain/arc/allowlist";
 import { enqueueAgentTask } from "@/domain/arc/tasks";
 
 export const runtime = "nodejs";
+/** Allow Fund button to wait through Circle faucet rate limits + balance sync. */
+export const maxDuration = 300;
 
 async function jsonError(e: unknown) {
   if (e instanceof AuthError) {
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
         organizationId: user.organizationId,
         userId: user.id,
         domain: host,
-        uri: `${proto}://${host}/app/wallets`,
+        uri: `${proto}://${host}/app/payments?tab=wallets`,
       });
       return NextResponse.json({
         message: challenge.message,
@@ -73,6 +77,27 @@ export async function POST(request: NextRequest) {
         actorId: user.id,
       });
       return NextResponse.json({ ok: true, wallet });
+    }
+
+    if (action === "upgrade_agent_circle") {
+      await requireSessionUser(["admin"]);
+      const wallet = await upgradeAgentWalletToCircle({
+        organizationId: user.organizationId,
+        actorType: "user",
+        actorId: user.id,
+      });
+      return NextResponse.json({ ok: true, wallet });
+    }
+
+    if (action === "fund_agent_testnet") {
+      await requireSessionUser(["admin", "payer"]);
+      const waitSec = Math.max(0, Math.min(Number(body.waitSec ?? 90) || 0, 180));
+      const result = await fundAgentTestnet({
+        organizationId: user.organizationId,
+        actorId: user.id,
+        waitMs: waitSec * 1000,
+      });
+      return NextResponse.json({ ok: true, ...result });
     }
 
     if (action === "sync") {

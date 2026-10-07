@@ -197,7 +197,7 @@ export default function CircleEmailOtpLogin({
     sdk.setLocalizations?.({
       emailOtp: {
         title: "Enter your code",
-        subtitle: "We emailed a one-time code to sign you in",
+        subtitle: "Enter the code from your email",
         resendHint: "Didn’t get it?",
         resend: "Resend",
       },
@@ -380,7 +380,7 @@ export default function CircleEmailOtpLogin({
           <button type="submit" className="btn btn-black w-full" disabled={busy || !sdkReady}>
             {busy ? "Sending…" : !sdkReady ? "Preparing…" : "Continue"}
           </button>
-          <p className="text-[0.78rem] text-muted">We’ll email a one-time code to sign you in.</p>
+          <p className="text-[0.78rem] text-muted">A one-time code will be sent to this email.</p>
         </form>
       ) : step === "finishing" ? (
         <div className="space-y-4">

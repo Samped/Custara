@@ -90,108 +90,66 @@ export default async function ConnectorsPage({
   }
 
   return (
-    <AppShell
-      user={user}
-      title="Connectors"
-      subtitle="Ingest from email, PDF, or API — Custara parses amount, vendor, and due date, then runs risk"
-    >
+    <AppShell user={user} title="Connectors">
       {params.error ? <p className="mb-4 text-sm text-danger">{params.error}</p> : null}
       {params.sftp === "synced" ? (
         <p className="mb-4 text-sm text-accent">Drop folder processed.</p>
       ) : null}
 
-      <section className="card mb-4 p-5">
-        <h2 className="app-h">How email ingest works</h2>
-        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-muted">
-          <li>
-            Copy your workspace ingest address and share it with vendors (PDF / image / CSV attachments).
-          </li>
-          <li>
-            Ops routes that mailbox through an ESP (Mailgun, SendGrid, etc.) to{" "}
-            <code className="text-foreground">POST /api/ingest/mailbox</code> with{" "}
-            <code className="text-foreground">MAILBOX_INBOUND_SECRET</code>.
-          </li>
-          <li>
-            Custara stores attachments only (not the full email body), extracts what is owed, then scores
-            risk — invoices appear in Inbox once the worker analyzes them.
-          </li>
-        </ol>
-      </section>
-
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="card p-5">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-muted">01</p>
-          <h2 className="app-h mt-1">Email ingest</h2>
-          <p className="app-sub">Vendors email invoices here (attachments only).</p>
-          <p className="mt-4 break-all font-mono text-[0.85rem] text-foreground">{ingestEmail}</p>
+        <section className="dash-panel">
+          <h2 className="dash-h">Email ingest</h2>
+          <p className="mt-3 break-all font-mono text-[0.85rem] text-foreground">{ingestEmail}</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <CopyButton value={ingestEmail} label="Copy address" />
           </div>
           <p className="mt-3 text-[0.72rem] text-muted">
-            ESP webhook: <code>POST /api/ingest/mailbox</code> with{" "}
-            <code>MAILBOX_INBOUND_SECRET</code>
+            Webhook: <code>POST /api/ingest/mailbox</code>
           </p>
         </section>
 
-        <section className="card p-5">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-muted">02</p>
-          <h2 className="app-h mt-1">Invite a vendor</h2>
-          <p className="app-sub">Magic-link upload — no Custara login required.</p>
+        <section className="dash-panel">
+          <h2 className="dash-h">Vendor portal</h2>
           <div className="mt-4">
-            <Link href="/app/vendor-portal" className="btn btn-primary">
-              Open vendor portal
+            <Link href="/app/vendors?tab=portal" className="btn btn-primary">
+              Manage invites
             </Link>
           </div>
         </section>
 
-        <section className="card p-5 lg:col-span-2">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-muted">03</p>
-          <h2 className="app-h mt-1">Connect by API</h2>
-          <p className="app-sub">
-            Create a Bearer key, then push invoices from your app or ERP.
-          </p>
+        <section className="dash-panel lg:col-span-2">
+          <h2 className="dash-h">API</h2>
           <pre className="mt-4 overflow-x-auto rounded-xl bg-[#f7fafb] p-3 text-[0.72rem] text-muted">
             {invoiceCurl}
           </pre>
           <div className="mt-4 flex flex-wrap gap-2">
             <CopyButton value={invoiceCurl} label="Copy curl" />
             <Link href="/app/developers" className="btn btn-primary">
-              Create API key
-            </Link>
-          </div>
-        </section>
-
-        <section className="card p-5 lg:col-span-2">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-muted">04</p>
-          <h2 className="app-h mt-1">FIRS JSON</h2>
-          <p className="app-sub">
-            Nigeria e-invoice / IRN payloads via Partner API.
-          </p>
-          <pre className="mt-4 overflow-x-auto rounded-xl bg-[#f7fafb] p-3 text-[0.72rem] text-muted">
-            {firsCurl}
-          </pre>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <CopyButton value={firsCurl} label="Copy curl" />
-            <Link href="/app/developers" className="btn btn-secondary">
               API keys
             </Link>
           </div>
         </section>
 
-        <section className="card p-5 lg:col-span-2">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-muted">05</p>
-          <h2 className="app-h mt-1">Drop a file</h2>
-          <p className="app-sub">
-            Drop CSV, PDF, or FIRS JSON into the workspace folder, then process.
-          </p>
-          <p className="mt-4 break-all font-mono text-[0.78rem] text-foreground">
+        <section className="dash-panel lg:col-span-2">
+          <h2 className="dash-h">FIRS</h2>
+          <pre className="mt-4 overflow-x-auto rounded-xl bg-[#f7fafb] p-3 text-[0.72rem] text-muted">
+            {firsCurl}
+          </pre>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <CopyButton value={firsCurl} label="Copy curl" />
+          </div>
+        </section>
+
+        <section className="dash-panel lg:col-span-2">
+          <h2 className="dash-h">File drop</h2>
+          <p className="mt-3 break-all font-mono text-[0.78rem] text-foreground">
             {incomingPath || "—"}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {incomingPath ? <CopyButton value={incomingPath} label="Copy path" /> : null}
             <form action={processDrop}>
               <button type="submit" className="btn btn-primary">
-                Process now
+                Process
               </button>
             </form>
           </div>

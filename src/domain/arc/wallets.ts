@@ -1,8 +1,13 @@
 import { SiweMessage } from "siwe";
 import { prisma } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
-import { getArcChain } from "./config";
-import { createAgentWallet, getWalletUsdcBalance, newChallengeNonce } from "./circle";
+import { allowSimulatedArc, getArcChain, isCircleConfigured, requireCircleOrThrow } from "./config";
+import {
+  createAgentWallet,
+  getWalletUsdcBalance,
+  newChallengeNonce,
+  requestTestnetUsdcFaucet,
+} from "./circle";
 
 function normalizeAddress(address: string) {
   const a = address.trim().toLowerCase();
@@ -48,6 +53,89 @@ export async function ensureAgentWallet(input: {
   });
 
   return wallet;
+}
+
+/**
+ * Replace a simulated (sandbox) agent wallet with a real Circle developer wallet on ARC-TESTNET/ARC.
+ * Prior agent address is revoked — re-fund the new address with testnet USDC.
+ */
+export async function upgradeAgentWalletToCircle(input: {
+  organizationId: string;
+  actorType: "user" | "system" | "api_key";
+  actorId?: string;
+}) {
+  requireCircleOrThrow("Circle agent upgrade");
+  if (!isCircleConfigured()) {
+    throw new Error("Circle API key + entity secret required to provision a real testnet agent");
+  }
+
+  const existing = await prisma.orgWallet.findFirst({
+    where: { organizationId: input.organizationId, role: "agent", status: { in: ["active", "pending"] } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (existing?.provider === "circle" && existing.circleWalletId && !existing.circleWalletId.startsWith("sbx_")) {
+    return existing;
+  }
+
+  if (existing) {
+    await prisma.orgWallet.update({
+      where: { id: existing.id },
+      data: {
+        status: "revoked",
+        label: existing.label ? `${existing.label} (replaced)` : "Simulated agent (replaced)",
+      },
+    });
+  }
+
+  const created = await createAgentWallet({
+    organizationId: input.organizationId,
+    label: `custara-agent-${input.organizationId}`,
+  });
+  if (created.provider !== "circle") {
+    throw new Error("Circle wallet create returned a non-Circle provider — check CIRCLE_* credentials");
+  }
+
+  const wallet = await prisma.orgWallet.create({
+    data: {
+      organizationId: input.organizationId,
+      role: "agent",
+      provider: "circle",
+      blockchain: created.blockchain,
+      address: created.address.toLowerCase(),
+      circleWalletId: created.id,
+      circleWalletSetId: created.walletSetId,
+      status: "active",
+      label: "Custara agent wallet (Circle)",
+      verifiedAt: new Date(),
+      balanceUsdc: null,
+      balanceSyncedAt: null,
+    },
+  });
+
+  await writeAudit({
+    organizationId: input.organizationId,
+    actorType: input.actorType,
+    actorId: input.actorId,
+    action: "wallet.agent_upgraded_circle",
+    entityType: "org_wallet",
+    entityId: wallet.id,
+    metadata: {
+      address: wallet.address,
+      previousAddress: existing?.address,
+      previousProvider: existing?.provider,
+      blockchain: wallet.blockchain,
+      simulatedAllowed: allowSimulatedArc(),
+    },
+  });
+
+  try {
+    await syncWalletBalances(input.organizationId);
+  } catch {
+    // balance sync may be empty until funded
+  }
+
+  return prisma.orgWallet.findUniqueOrThrow({ where: { id: wallet.id } });
 }
 
 export async function createTreasuryLinkChallenge(input: {
@@ -225,6 +313,140 @@ export async function linkTreasuryAddressManual(input: {
     metadata: { address },
   });
   return wallet;
+}
+
+function sleepMs(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fund the active Circle agent via Circle testnet faucet.
+ * When waitMs > 0, retries through rate limits and polls Sync until balance rises or time runs out.
+ */
+export async function fundAgentTestnet(input: {
+  organizationId: string;
+  actorId?: string;
+  /** How long to keep retrying / polling in this request (ms). Cap ~3 minutes for HTTP. */
+  waitMs?: number;
+}) {
+  const agent = await prisma.orgWallet.findFirst({
+    where: { organizationId: input.organizationId, role: "agent", status: "active" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!agent) throw new Error("No active agent wallet — provision or upgrade first");
+  if (agent.provider !== "circle" || agent.circleWalletId?.startsWith("sbx_")) {
+    throw new Error("Upgrade to a Circle testnet agent before funding");
+  }
+  const chain = agent.blockchain || getArcChain();
+  if (chain !== "ARC-TESTNET" && !String(chain).toUpperCase().includes("TESTNET")) {
+    throw new Error("Fund is only for testnet agent wallets");
+  }
+
+  const waitMs = Math.max(0, Math.min(input.waitMs ?? 0, 180_000));
+  const deadline = Date.now() + waitMs;
+  const before =
+    (await getWalletUsdcBalance({
+      walletId: agent.circleWalletId,
+      address: agent.address,
+      provider: agent.provider,
+    }).catch(() => agent.balanceUsdc ?? 0)) ?? 0;
+
+  let wallets = await listOrgWallets(input.organizationId);
+  let balanceUsdc = wallets.find((w) => w.id === agent.id)?.balanceUsdc ?? before;
+
+  if (before > 0) {
+    return {
+      faucet: {
+        ok: true as const,
+        method: "circle_api" as const,
+        message: `Already funded — agent has ${before} USDC.`,
+      },
+      funded: true,
+      agentAddress: agent.address,
+      blockchain: chain,
+      balanceUsdc: before,
+      balanceBefore: before,
+      wallets,
+    };
+  }
+
+  let faucet = await requestTestnetUsdcFaucet({
+    address: agent.address,
+    blockchain: chain,
+    retries: 0,
+  });
+
+  await writeAudit({
+    organizationId: input.organizationId,
+    actorType: "user",
+    actorId: input.actorId,
+    action: "wallet.agent_fund_requested",
+    entityType: "org_wallet",
+    entityId: agent.id,
+    metadata: {
+      address: agent.address,
+      method: faucet.method,
+      ok: faucet.ok,
+      blockchain: chain,
+      waitMs,
+    },
+  });
+
+  const refreshBalance = async () => {
+    try {
+      wallets = await syncWalletBalances(input.organizationId);
+    } catch {
+      // ignore transient sync errors
+    }
+    balanceUsdc =
+      wallets.find((w) => w.id === agent.id)?.balanceUsdc ??
+      (await getWalletUsdcBalance({
+        walletId: agent.circleWalletId,
+        address: agent.address,
+        provider: agent.provider,
+      }).catch(() => balanceUsdc));
+    return balanceUsdc;
+  };
+
+  if (faucet.ok || waitMs > 0) {
+    await refreshBalance();
+  }
+
+  while (balanceUsdc <= before && Date.now() < deadline) {
+    if (!faucet.ok) {
+      const pause =
+        faucet.method === "rate_limited"
+          ? Math.min(faucet.retryAfterMs || 60_000, Math.max(5_000, deadline - Date.now()))
+          : Math.min(30_000, Math.max(5_000, deadline - Date.now()));
+      if (pause <= 0) break;
+      await sleepMs(pause);
+      faucet = await requestTestnetUsdcFaucet({
+        address: agent.address,
+        blockchain: chain,
+        retries: 0,
+      });
+    } else {
+      await sleepMs(Math.min(8_000, Math.max(3_000, deadline - Date.now())));
+    }
+    await refreshBalance();
+  }
+
+  const funded = balanceUsdc > before;
+  return {
+    faucet: funded
+      ? {
+          ok: true as const,
+          method: "circle_api" as const,
+          message: `Funded — agent now has ${balanceUsdc} USDC.`,
+        }
+      : faucet,
+    funded,
+    agentAddress: agent.address,
+    blockchain: chain,
+    balanceUsdc,
+    balanceBefore: before,
+    wallets,
+  };
 }
 
 export async function syncWalletBalances(organizationId: string) {

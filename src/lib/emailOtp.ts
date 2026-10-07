@@ -130,20 +130,41 @@ export type LoginCompleteResult = {
 
 export async function resolveOrCreateUserByEmail(email: string) {
   const normalized = email.trim().toLowerCase();
-  const existing = await prisma.workspaceUser.findFirst({
-    where: { email: normalized, disabledAt: null },
+
+  // Prefer any existing membership (including incomplete onboarding) over JIT.
+  // Disabled memberships are reactivated instead of creating a sibling org.
+  const anyExisting = await prisma.workspaceUser.findFirst({
+    where: { email: normalized },
     include: { organization: true },
     orderBy: { createdAt: "asc" },
   });
 
-  if (existing) {
-    if (existing.organization.ssoEnforced && isOidcConfigured()) {
+  if (anyExisting) {
+    let user = anyExisting;
+    if (user.disabledAt) {
+      user = await prisma.workspaceUser.update({
+        where: { id: user.id },
+        data: { disabledAt: null },
+        include: { organization: true },
+      });
+      await writeAudit({
+        organizationId: user.organizationId,
+        actorType: "user",
+        actorId: user.id,
+        action: "user.reactivated_on_login",
+        entityType: "workspace_user",
+        entityId: user.id,
+        metadata: { email: normalized },
+      });
+    }
+
+    if (user.organization.ssoEnforced && isOidcConfigured()) {
       throw new Error("SSO required for this organization");
     }
-    if (!isEmailDomainAllowed(existing.email) && isOidcConfigured()) {
+    if (!isEmailDomainAllowed(user.email) && isOidcConfigured()) {
       throw new Error("Email domain not allowed");
     }
-    return { user: existing, jitCreated: false };
+    return { user, jitCreated: false };
   }
 
   if (!allowJitOrgCreation()) {
@@ -153,20 +174,24 @@ export async function resolveOrCreateUserByEmail(email: string) {
   }
 
   const local = normalized.split("@")[0] || "workspace";
-  const slugBase = local
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 24) || "org";
+  const slugBase =
+    local
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 24) || "org";
   const slug = `${slugBase}-${nanoid(6)}`.toLowerCase();
-  const displayName = local.replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "Workspace";
+  const displayName =
+    local.replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "Workspace";
 
   const org = await prisma.organization.create({
     data: {
       name: `${displayName}'s workspace`,
       slug,
       privacyMode: true,
-      paymentMode: "sandbox",
+      // Enterprise default: real Arc rails (testnet/mainnet via env). Simulated requires ARC_ALLOW_SIMULATED.
+      paymentMode: "live",
+      displayCurrency: "USD",
       ssoEnforced: false,
       mfaRequiredForRoles: "[]",
     },
@@ -189,8 +214,16 @@ export async function resolveOrCreateUserByEmail(email: string) {
     action: "auth.jit_org_created",
     entityType: "organization",
     entityId: org.id,
-    metadata: { email: normalized, slug },
+    metadata: {
+      email: normalized,
+      slug,
+      note: "New workspace — prior membership not found. db:seed/db:reset wipes custom startups.",
+    },
   });
+
+  console.warn(
+    `[custara] JIT org created for ${normalized} → ${slug} (no existing WorkspaceUser; seed/reset may have wiped data)`,
+  );
 
   return { user, jitCreated: true };
 }
@@ -235,19 +268,42 @@ export async function completeEmailLogin(
       await createSession(user.id);
       const needsOnboarding = !user.organization.onboardingCompletedAt;
       return {
-        redirect: needsOnboarding ? "/app/onboarding" : "/app/settings?mfa=enroll",
+        redirect: needsOnboarding ? "/app/onboarding" : "/app/onboarding/mfa",
         organizationId: user.organizationId,
         userId: user.id,
         jitCreated,
       };
     }
-    throw new Error("MFA enrollment required — contact an admin");
+    await createSession(user.id);
+    return {
+      redirect: "/app/security",
+      organizationId: user.organizationId,
+      userId: user.id,
+      jitCreated,
+    };
   }
 
   await createSession(user.id);
   const needsOnboarding = !user.organization.onboardingCompletedAt;
+  if (needsOnboarding || jitCreated) {
+    return {
+      redirect: "/app/onboarding",
+      organizationId: user.organizationId,
+      userId: user.id,
+      jitCreated,
+    };
+  }
+  const { userNeedsMfaPrompt } = await import("@/lib/mfa");
+  if (await userNeedsMfaPrompt(user.id)) {
+    return {
+      redirect: "/app/onboarding/mfa",
+      organizationId: user.organizationId,
+      userId: user.id,
+      jitCreated,
+    };
+  }
   return {
-    redirect: needsOnboarding || jitCreated ? "/app/onboarding" : "/app",
+    redirect: "/app",
     organizationId: user.organizationId,
     userId: user.id,
     jitCreated,

@@ -13,7 +13,12 @@
     "postinstall": "prisma generate",
     "db:up": "tsx scripts/embedded-pg.ts",
     "worker": "tsx src/worker.ts",
-    "test": "tsx --test tests/**/*.test.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "E2E=1 tsx --test tests/e2e/**/*.test.ts",
+    "test:e2e:ui": "playwright test",
+    "fixtures:generate": "tsx scripts/generate-fixtures.ts",
+    "fixtures:pay-ready": "tsx scripts/generate-pay-ready.ts",
+    "fund:agent": "tsx scripts/fund-agent-testnet.ts",
     "dev:all": "echo 'Run: npm run db:up (terminal 1), redis + npm run worker (terminal 2), npm run dev (terminal 3)'"
   },
   "dependencies": {
@@ -42,9 +47,11 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.2",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ssh2-sftp-client": "^9.0.6",

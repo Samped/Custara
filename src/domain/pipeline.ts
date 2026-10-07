@@ -184,6 +184,13 @@ export async function decideApproval(input: {
         data: { isNew: false },
       });
     }
+    // Approval accepts review holds — clear matching risks so pay-time guards can pass.
+    await prisma.riskAssessment.deleteMany({
+      where: {
+        invoiceId: approval.invoiceId,
+        code: { in: ["new_vendor", "bank_detail_change", "low_confidence", "arc_address_change"] },
+      },
+    });
     const { recommendPayTiming } = await import("@/domain/timing");
     await recommendPayTiming({
       organizationId: input.organizationId,

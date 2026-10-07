@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { orgNeedsOnboarding } from "@/domain/onboarding";
+import { userNeedsMfaPrompt } from "@/lib/mfa";
 
 export default async function AppSectionLayout({
   children,
@@ -9,13 +10,26 @@ export default async function AppSectionLayout({
   children: React.ReactNode;
 }) {
   const pathname = (await headers()).get("x-pathname") || "";
-  const onOnboarding = pathname.startsWith("/app/onboarding");
+  const onCompanyOnboarding = pathname === "/app/onboarding" || pathname === "/app/onboarding/";
+  const onMfaOnboarding = pathname.startsWith("/app/onboarding/mfa");
   const user = await getSessionUser();
 
   if (user) {
-    const needs = await orgNeedsOnboarding(user.organizationId);
-    if (needs && !onOnboarding) redirect("/app/onboarding");
-    if (!needs && onOnboarding) redirect("/app");
+    const needsCompany = await orgNeedsOnboarding(user.organizationId);
+
+    if (needsCompany && !onCompanyOnboarding) {
+      redirect("/app/onboarding");
+    }
+
+    if (!needsCompany && onCompanyOnboarding) {
+      const needsMfaPrompt = await userNeedsMfaPrompt(user.id);
+      redirect(needsMfaPrompt ? "/app/onboarding/mfa" : "/app");
+    }
+
+    if (!needsCompany && !onMfaOnboarding) {
+      const needsMfaPrompt = await userNeedsMfaPrompt(user.id);
+      if (needsMfaPrompt) redirect("/app/onboarding/mfa");
+    }
   }
 
   return children;

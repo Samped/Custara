@@ -44,8 +44,30 @@ export async function confirmMfaEnrollment(userId: string, token: string) {
   if (!verifyTotp(secret, token)) throw new Error("Invalid MFA code");
   return prisma.workspaceUser.update({
     where: { id: userId },
-    data: { mfaEnabled: true, mfaVerifiedAt: new Date() },
+    data: {
+      mfaEnabled: true,
+      mfaVerifiedAt: new Date(),
+      mfaPromptCompletedAt: new Date(),
+    },
   });
+}
+
+/** Mark post-signup MFA prompt as done (skip). Does not enable MFA. */
+export async function skipMfaPrompt(userId: string) {
+  return prisma.workspaceUser.update({
+    where: { id: userId },
+    data: { mfaPromptCompletedAt: new Date() },
+  });
+}
+
+export async function userNeedsMfaPrompt(userId: string) {
+  const user = await prisma.workspaceUser.findUnique({
+    where: { id: userId },
+    select: { mfaEnabled: true, mfaPromptCompletedAt: true },
+  });
+  if (!user) return false;
+  if (user.mfaEnabled) return false;
+  return !user.mfaPromptCompletedAt;
 }
 
 export async function disableMfa(userId: string, token: string) {

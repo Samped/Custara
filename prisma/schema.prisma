@@ -15,6 +15,8 @@ model Organization {
   businessType      String?  // company | startup | sole_trader | nonprofit | other
   industry          String?
   country           String?
+  /// Dashboard display currency (ISO / stablecoin). Null → derive from country, else USD.
+  displayCurrency   String?
   website           String?
   onboardingCompletedAt DateTime?
   privacyMode       Boolean  @default(true)
@@ -57,7 +59,8 @@ model Organization {
 model WorkspaceUser {
   id             String    @id @default(cuid())
   organizationId String
-  email          String
+  /// Globally unique — one email owns one startup membership for OTP login continuity.
+  email          String    @unique
   name           String
   passwordHash   String?
   role           String // admin | approver | payer | viewer | auditor
@@ -65,6 +68,8 @@ model WorkspaceUser {
   mfaEnabled     Boolean   @default(false)
   mfaSecretEnc   String?
   mfaVerifiedAt  DateTime?
+  /// Set when user finishes MFA setup or explicitly skips the post-signup prompt.
+  mfaPromptCompletedAt DateTime?
   lastLoginAt    DateTime?
   disabledAt     DateTime?
   createdAt      DateTime  @default(now())
@@ -75,7 +80,6 @@ model WorkspaceUser {
   decisions    ApprovalDecision[]
   sessions     Session[]
 
-  @@unique([organizationId, email])
   @@index([organizationId, role])
 }
 

@@ -21,7 +21,7 @@ export default async function ApprovalsPage() {
   });
 
   return (
-    <AppShell user={user} title="Approvals" subtitle="Human-in-the-loop · risks at decision time">
+    <AppShell user={user} title="Approvals">
       <div className="dash space-y-3">
         {approvals.map((approval) => (
           <div key={approval.id} className="dash-panel">

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { PageAtmosphere } from "@/components/app/GridAtmosphere";
 import { BUSINESS_TYPES, completeCompanyOnboarding } from "@/domain/onboarding";
+import { COUNTRY_OPTIONS, currencyFromCountry } from "@/lib/currency";
 
 export default async function OnboardingPage({
   searchParams,
@@ -27,10 +28,9 @@ export default async function OnboardingPage({
     <PageAtmosphere className="app-shell flex min-h-screen items-center justify-center px-4 py-10">
       <div className="login-panel">
         <BrandLogo href={null} size={30} wordmarkClassName="text-[0.95rem]" />
-          <h1 className="mt-6 page-title">Waiting on setup</h1>
+          <h1 className="mt-6 page-title">Setup required</h1>
           <p className="mt-2 page-subtitle">
-            An admin still needs to register {org.name} before the dashboard opens. Ask them to finish company
-            setup, then refresh.
+            An admin must complete company setup for {org.name}. Refresh after setup.
           </p>
         </div>
       </PageAtmosphere>
@@ -56,7 +56,7 @@ export default async function OnboardingPage({
         `/app/onboarding?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not save")}`,
       );
     }
-    redirect("/app");
+    redirect("/app/onboarding/mfa");
   }
 
   const defaultName = org.name.endsWith("'s workspace") ? "" : org.name;
@@ -65,10 +65,8 @@ export default async function OnboardingPage({
     <PageAtmosphere className="app-shell flex min-h-screen items-center justify-center px-4 py-10">
       <div className="login-panel" style={{ width: "min(520px, 100%)" }}>
         <BrandLogo href={null} size={30} wordmarkClassName="text-[0.95rem]" />
-        <h1 className="mt-6 page-title">Register your company</h1>
-        <p className="mt-2 page-subtitle">
-          Tell Custara about your business or startup. Your dashboard unlocks after this step.
-        </p>
+        <h1 className="mt-6 page-title">Company profile</h1>
+        <p className="mt-2 page-subtitle">Required before workspace access.</p>
 
         {params.error ? <p className="mt-4 text-sm text-danger">{params.error}</p> : null}
 
@@ -123,16 +121,22 @@ export default async function OnboardingPage({
             </div>
             <div>
               <label className="mb-1.5 block text-[0.78rem] font-semibold" htmlFor="country">
-                Country
+                Business location{" "}
+                <span className="font-normal text-muted">(sets dashboard currency)</span>
               </label>
-              <input
+              <select
                 id="country"
                 name="country"
                 className="input"
-                placeholder="NG"
-                maxLength={2}
-                defaultValue={org.country || "NG"}
-              />
+                defaultValue={org.country || ""}
+              >
+                <option value="">Not set — dashboard defaults to USD</option>
+                {COUNTRY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label} ({currencyFromCountry(c.code)})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -163,11 +167,9 @@ export default async function OnboardingPage({
           </div>
 
           <button type="submit" className="btn btn-black w-full">
-            Create workspace dashboard
+            Continue
           </button>
-          <p className="text-[0.78rem] text-muted">
-            Signed in as {user.email}. You can refine details later in Settings.
-          </p>
+          <p className="text-[0.78rem] text-muted">Signed in as {user.email}</p>
         </form>
       </div>
     </PageAtmosphere>

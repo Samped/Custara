@@ -1,0 +1,11 @@
+{
+  "vendor_name": "Northern Haulage Ltd",
+  "invoice_number": "FIX-LOWCONF-005",
+  "total_amount": 9000,
+  "currency": "NGN",
+  "due_date": "2026-10-01",
+  "confidence": 0.4,
+  "account_name": "Northern Haulage Ltd",
+  "account_number": "0123456789",
+  "bank_name": "Access Bank"
+}

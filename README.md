@@ -17,7 +17,7 @@ ingest → extract → risk → policy → (approve) → pay timing → payment 
 | Area | Details |
 |------|---------|
 | Ingest | Upload, CSV, org ingest email, mailbox webhook, SFTP drop, FIRS e-invoice, ERP adapters, vendor portal |
-| Controls | Versioned policies, maker-checker approvals, MFA (incl. pay step-up in live), destination allowlist, spend caps |
+| Controls | Versioned policies, maker-checker approvals, MFA (pay step-up when MFA is on), destination allowlist, spend caps |
 | Money | Arc USDC via Circle agent wallet; Nigeria rail is export/sandbox unless partner live is enabled |
 | Audit | Hash-chained events, request IDs, SIEM export |
 | API | Scoped keys, idempotency, rate limits — `GET /api/openapi` |
@@ -71,6 +71,9 @@ npx prisma db push
 npm run db:seed
 ```
 
+> **Warning:** `npm run db:seed` and `npm run db:reset` **delete all organizations and users**, then recreate only the Lagos demo workspace. Your own startup (e.g. LOOP) and its data will be wiped. Do **not** seed when you want to keep a workspace you registered via OTP. Prefer `npx prisma db push` alone after schema changes.
+
+Your email is tied to one startup membership (`WorkspaceUser.email` is globally unique). Log out and back in resumes the same company — unless the database was wiped as above.
 **Terminal 2 — Redis + worker** (skip Redis if Compose already started it)
 
 ```bash
@@ -131,17 +134,17 @@ Optional: OIDC (`OIDC_*`), Xero/QBO/Sage/Zoho, mailbox/SFTP/WhatsApp, S3 storage
 
 | Path | Purpose |
 |------|---------|
-| `/app` | Ops overview |
+| `/app` | Ops overview + team invites (admin) |
 | `/app/inbox` | Ingest and triage |
 | `/app/approvals` | Maker-checker |
 | `/app/policies` | Publish / simulate rules |
-| `/app/wallets` | Treasury + agent wallet |
-| `/app/payments` | Payment intents |
+| `/app/wallets` | Treasury + agent wallet + agent tasks |
+| `/app/payments` | Payment intents (Arc USDC + export) |
 | `/app/cash` | Obligations and suggested pays |
 | `/app/collections` | Thin AR / dunning |
 | `/app/connectors` | Ready ingest paths |
 | `/app/developers` | Keys, webhooks, curl |
-| `/app/settings` | Org, MFA, live/sandbox |
+| `/app/settings` | Org, MFA, currency, team, live/sandbox |
 | `/app/audit` | Audit trail |
 
 ---
@@ -178,11 +181,14 @@ ERP shape notes: [docs/erp-adapters.md](docs/erp-adapters.md)
 ## Tests
 
 ```bash
-npm test          # tenant isolation + policy money controls
-npx tsc --noEmit
+npm test                 # unit: tenant isolation + policy money + csv parse
+npm run fixtures:generate
+E2E=1 npm run test:e2e   # API/domain E2E (app + DB + seed; Arc skips without Circle)
+npx playwright install chromium
+npm run test:e2e:ui      # Playwright smoke (app must be running)
 ```
 
-CI runs on PRs (typecheck + tests). Lint is present but some existing rules still fail clean.
+Full checklist: [docs/qa-runbook.md](docs/qa-runbook.md). Agent tasks / Arc on-chain: [docs/agent-payments.md](docs/agent-payments.md). Sample files: [fixtures/](fixtures/).
 
 ---
 
@@ -195,7 +201,7 @@ src/lib/          # Auth, crypto, jobs, audit, storage
 src/worker.ts     # BullMQ consumers + scheduled jobs
 prisma/           # Schema + seed
 tests/            # Node test runner
-docs/             # ERP adapters, SOC 2 roadmap
+docs/             # ERP adapters, agent payments, SOC 2 roadmap, QA runbook
 ```
 
 ---
@@ -204,6 +210,7 @@ docs/             # ERP adapters, SOC 2 roadmap
 
 - Bank account numbers and webhook signing secrets are encrypted at rest (AES-256-GCM).
 - Production disables JIT org creation unless `ALLOW_JIT_ORG_CREATION=true`.
+- Each email maps to one workspace membership (login resumes the same startup). Admins invite teammates from the dashboard Team panel with roles: Viewer, Approver, Payer (upload + pay), Auditor, Admin (API + settings).
 - SSO users must be invited first; OIDC is supported, SCIM/SAML are not.
 - Destination screening defaults to allowlist-only; optional HTTP screener via `SCREENING_PROVIDER`.
 - Nigeria fiat is file export unless a licensed partner live flag is set.

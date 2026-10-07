@@ -4,6 +4,7 @@ import { AuthError } from "./auth";
 /** Default-deny capability matrix for console surfaces and mutations. */
 export type AppCapability =
   | "inbox:read"
+  | "inbox:write"
   | "invoice:read"
   | "approvals:read"
   | "approvals:write"
@@ -25,6 +26,7 @@ export type AppCapability =
 const ROLE_CAPS: Record<Role, AppCapability[]> = {
   admin: [
     "inbox:read",
+    "inbox:write",
     "invoice:read",
     "approvals:read",
     "approvals:write",
@@ -55,6 +57,7 @@ const ROLE_CAPS: Record<Role, AppCapability[]> = {
   ],
   payer: [
     "inbox:read",
+    "inbox:write",
     "invoice:read",
     "approvals:read",
     "vendors:read",
@@ -95,6 +98,7 @@ export const ROUTE_CAPABILITY: Record<string, AppCapability> = {
   "/app/approvals": "approvals:read",
   "/app/vendors": "vendors:read",
   "/app/payments": "payments:read",
+  "/app/receipts": "payments:read",
   "/app/wallets": "wallets:read",
   "/app/cash": "cash:read",
   "/app/collections": "cash:read",
@@ -103,6 +107,8 @@ export const ROUTE_CAPABILITY: Record<string, AppCapability> = {
   "/app/connectors": "connectors:read",
   "/app/vendor-portal": "connectors:write",
   "/app/settings": "settings:write",
+  "/app/roles": "settings:write",
+  "/app/security": "inbox:read",
   "/app/developers": "developers:read",
 };
 

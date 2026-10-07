@@ -64,13 +64,9 @@ export default async function LoginPage({
     <PageAtmosphere className="app-shell flex min-h-screen items-center justify-center px-4">
       <div className="login-panel">
         <BrandLogo href={null} size={30} wordmarkClassName="text-[0.95rem]" />
-        <h1 className="mt-6 page-title">
-          {mfaStep ? "Confirm it’s you" : "Welcome back"}
-        </h1>
+        <h1 className="mt-6 page-title">{mfaStep ? "MFA verification" : "Sign in"}</h1>
         <p className="mt-2 page-subtitle">
-          {mfaStep
-            ? "Enter the 6-digit code from your authenticator app."
-            : "Enter your work email. We’ll send a one-time code."}
+          {mfaStep ? "Enter your authenticator code." : "Work email · one-time code"}
         </p>
 
         {params.error ? <p className="mt-4 text-sm text-danger">{params.error}</p> : null}

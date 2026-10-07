@@ -24,7 +24,14 @@ export async function assertPayTimeGuards(input: {
   });
   if (!invoice) throw new Error("Invoice not found for pay-time guards");
 
-  const hard = invoice.risks.filter((r) => r.severity === "hard");
+  // Stale destination_not_allowlisted is ignored when pay-time allowlist check will pass.
+  const hard = invoice.risks.filter((r) => {
+    if (r.severity !== "hard") return false;
+    if (r.code === "destination_not_allowlisted" && input.rail === "arc_usdc" && input.arcAddress) {
+      return false;
+    }
+    return true;
+  });
   if (hard.length) {
     throw new Error(
       `Pay blocked: hard risks still present (${hard.map((r) => r.code).join(", ")})`,

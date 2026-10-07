@@ -52,6 +52,26 @@ export async function addDestination(input: {
       revokedAt: null,
     },
   });
+  // Clear pay holds that existed only because this destination was unknown.
+  await prisma.riskAssessment.deleteMany({
+    where: {
+      code: "destination_not_allowlisted",
+      invoice: { organizationId: input.organizationId },
+      OR: [
+        { evidenceJson: { contains: address } },
+        {
+          invoice: {
+            vendor: {
+              endpoints: {
+                some: { endpointType: "arc_usdc", arcAddress: address },
+              },
+            },
+          },
+        },
+      ],
+    },
+  });
+
   await writeAudit({
     organizationId: input.organizationId,
     actorType: "user",
@@ -62,6 +82,63 @@ export async function addDestination(input: {
     metadata: { address },
   });
   return row;
+}
+
+/**
+ * Confirm the invoice's Arc destination from the workbench (no Wallets detour).
+ * Adds to org allowlist and clears destination_not_allowlisted holds.
+ */
+export async function confirmInvoiceDestination(input: {
+  organizationId: string;
+  invoiceId: string;
+  actorId: string;
+}) {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: input.invoiceId, organizationId: input.organizationId },
+    include: {
+      vendor: {
+        include: {
+          endpoints: { where: { isActive: true, endpointType: "arc_usdc" }, orderBy: { version: "desc" } },
+        },
+      },
+      risks: true,
+      extraction: true,
+    },
+  });
+  if (!invoice) throw new Error("Invoice not found");
+
+  const fromEndpoint = invoice.vendor?.endpoints.find((e) => e.arcAddress)?.arcAddress;
+  const destRisk = invoice.risks.find((r) => r.code === "destination_not_allowlisted");
+  let evidence: { address?: string } | null = null;
+  if (destRisk?.evidenceJson) {
+    try {
+      evidence = JSON.parse(destRisk.evidenceJson) as { address?: string };
+    } catch {
+      evidence = null;
+    }
+  }
+  let fromRaw: string | null = null;
+  if (invoice.extraction?.rawJson) {
+    try {
+      const raw = JSON.parse(invoice.extraction.rawJson) as { arcAddress?: string; arc_address?: string };
+      fromRaw = raw.arcAddress || raw.arc_address || null;
+    } catch {
+      fromRaw = null;
+    }
+  }
+  const address = (fromEndpoint || evidence?.address || fromRaw || "").trim();
+  if (!address) throw new Error("No Arc destination found on this invoice");
+
+  const label =
+    invoice.vendor?.name || invoice.extraction?.vendorName || invoice.extraction?.accountName || undefined;
+
+  return addDestination({
+    organizationId: input.organizationId,
+    address,
+    label: label || undefined,
+    vendorId: invoice.vendorId || undefined,
+    actorId: input.actorId,
+  });
 }
 
 export async function revokeDestination(input: {

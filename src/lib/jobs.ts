@@ -24,6 +24,17 @@ export function getRedisConnection() {
   connection = new IORedis(url, {
     maxRetriesPerRequest: null,
     enableReadyCheck: true,
+    connectTimeout: 2_000,
+    retryStrategy(times) {
+      if (times > 3) return null;
+      return Math.min(times * 200, 1_000);
+    },
+  });
+  connection.on("error", (err) => {
+    // Avoid unhandled error crash when Redis is down during local/E2E
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[redis]", err.message);
+    }
   });
   return connection;
 }
@@ -78,6 +89,18 @@ export async function enqueueJob(input: {
   });
 
   try {
+    const redis = getRedisConnection();
+    const reachable = await Promise.race([
+      redis.ping().then((p) => p === "PONG"),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1_500)),
+    ]);
+    if (!reachable) {
+      console.warn(
+        "[jobs] Redis unreachable — job kept in Postgres pending. Start Redis + npm run worker.",
+      );
+      return { id: mirror.id, bullmqId: null, queue: queueName, name: input.name };
+    }
+
     const job = await getQueue(queueName).add(
       input.name,
       { ...input.payload, _mirrorJobId: mirror.id, organizationId: input.organizationId },

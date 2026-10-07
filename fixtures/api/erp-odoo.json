@@ -1,0 +1,30 @@
+{
+  "system": "odoo",
+  "sync": true,
+  "payload": {
+    "id": 9001,
+    "name": "BILL/2026/0901",
+    "partner_id": [
+      42,
+      "Northern Haulage Ltd"
+    ],
+    "amount_total": 27500,
+    "currency_id": [
+      1,
+      "NGN"
+    ],
+    "invoice_date": "2026-09-10",
+    "invoice_date_due": "2026-10-10",
+    "ref": "FIX-ODOO-001",
+    "invoice_line_ids": [
+      [
+        0,
+        0,
+        {
+          "name": "Haulage",
+          "price_subtotal": 27500
+        }
+      ]
+    ]
+  }
+}

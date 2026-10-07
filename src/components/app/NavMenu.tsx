@@ -5,27 +5,23 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 const nav = [
-  { href: "/app", label: "Dashboard", group: "Operations" },
-  { href: "/app/inbox", label: "Inbox", group: "Operations" },
-  { href: "/app/approvals", label: "Approvals", group: "Operations" },
-  { href: "/app/vendors", label: "Vendors", group: "Operations" },
-  { href: "/app/payments", label: "Payments", group: "Operations" },
-  { href: "/app/wallets", label: "Wallets", group: "Operations" },
-  { href: "/app/cash", label: "Cash", group: "Operations" },
-  { href: "/app/collections", label: "Collections", group: "Operations" },
-  { href: "/app/audit", label: "Audit", group: "Governance" },
-  { href: "/app/policies", label: "Policies", group: "Governance" },
-  { href: "/app/connectors", label: "Connectors", group: "Platform" },
-  { href: "/app/vendor-portal", label: "Vendor portal", group: "Platform" },
-  { href: "/app/settings", label: "Settings", group: "Platform" },
-  { href: "/app/developers", label: "API & guide", group: "Platform" },
+  { href: "/app", label: "Home", group: "Work" },
+  { href: "/app/inbox", label: "Inbox", group: "Work" },
+  { href: "/app/approvals", label: "Approvals", group: "Work" },
+  { href: "/app/vendors", label: "Vendors", group: "Work" },
+  { href: "/app/payments", label: "Pay", group: "Money" },
+  { href: "/app/cash", label: "Cash", group: "Money" },
+  { href: "/app/policies", label: "Controls", group: "Admin" },
+  { href: "/app/roles", label: "Roles", group: "Admin" },
+  { href: "/app/security", label: "Security", group: "Admin" },
+  { href: "/app/settings", label: "Settings", group: "Admin" },
 ];
 
 function currentLabel(pathname: string) {
   const exact = nav.find((item) => item.href === pathname);
   if (exact) return exact.label;
   const nested = [...nav].reverse().find((item) => item.href !== "/app" && pathname.startsWith(item.href));
-  return nested?.label || "Dashboard";
+  return nested?.label || "Home";
 }
 
 export function NavMenu() {
@@ -53,7 +49,7 @@ export function NavMenu() {
     };
   }, []);
 
-  const groups = ["Operations", "Governance", "Platform"] as const;
+  const groups = ["Work", "Money", "Admin"] as const;
 
   return (
     <div className="relative" ref={rootRef}>
@@ -93,7 +89,11 @@ export function NavMenu() {
                   return (
                     <Link key={item.href} href={item.href} role="menuitem" data-active={active ? "true" : "false"}>
                       <span>{item.label}</span>
-                      {active ? <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">Current</span> : null}
+                      {active ? (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">
+                          Current
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}

@@ -174,81 +174,33 @@ export default async function DevelopersPage({
   -d '{ "sync": true, "csv": "vendor_name,invoice_number,total_amount,currency\\nAcme,INV-9,15000,NGN\\n" }'`;
 
   return (
-    <AppShell
-      user={user}
-      title="API & guide"
-      subtitle="Keys · webhooks · curl · OpenAPI"
-    >
+    <AppShell user={user} title="API">
       {params.error ? <p className="mb-4 text-sm text-danger">{params.error}</p> : null}
 
       {revealedKey ? (
         <div className="card mb-5 border-[var(--accent)] p-5">
-          <h2 className="app-h">Copy your API key now</h2>
-          <p className="app-sub">Shown once. Store it in your secrets manager — Custara only keeps a hash.</p>
+          <h2 className="app-h">API key</h2>
+          <p className="app-sub">Shown once. Store securely; only a hash is retained.</p>
           <pre className="mt-3 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{revealedKey}</pre>
         </div>
       ) : null}
 
       {revealedWebhookSecret ? (
         <div className="card mb-5 border-[var(--accent)] p-5">
-          <h2 className="app-h">Webhook signing secret</h2>
-          <p className="app-sub">Verify `X-Custara-Signature` (HMAC-SHA256 of the raw body) with this secret.</p>
+          <h2 className="app-h">Webhook secret</h2>
+          <p className="app-sub">HMAC-SHA256 via `X-Custara-Signature`.</p>
           <pre className="mt-3 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{revealedWebhookSecret}</pre>
         </div>
       ) : null}
 
       <section className="card mb-5 p-5">
-        <h2 className="app-h">How companies integrate</h2>
-        <ol className="mt-4 space-y-4 text-sm">
-          <li className="flex gap-3">
-            <span className="feature-index">01</span>
-            <div>
-              <p className="font-semibold">Create an API key</p>
-              <p className="mt-1 text-muted">
-                Scoped Bearer token for your backend. Never put keys in browsers or mobile apps.
-              </p>
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <span className="feature-index">02</span>
-            <div>
-              <p className="font-semibold">Push invoices from your system</p>
-              <p className="mt-1 text-muted">
-                `POST /api/v1/invoices` from ERP, billing, or mailbox workers. Custara extracts, scores risk, and
-                routes by policy.
-              </p>
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <span className="feature-index">03</span>
-            <div>
-              <p className="font-semibold">Subscribe to webhooks</p>
-              <p className="mt-1 text-muted">
-                Receive approval and payment events on your HTTPS endpoint. Signature header: `X-Custara-Signature`.
-              </p>
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <span className="feature-index">04</span>
-            <div>
-              <p className="font-semibold">Connect ingest (ready now)</p>
-              <p className="mt-1 text-muted">
-                Ingest from email, PDF, or API — Custara parses amount, vendor, and due date, then runs
-                risk.{" "}
-                <Link href="/app/connectors" className="text-accent hover:underline">
-                  Open connectors
-                </Link>
-                .
-              </p>
-            </div>
-          </li>
-        </ol>
-        <div className="mt-5 flex flex-wrap gap-2">
+        <h2 className="app-h">Resources</h2>
+        <div className="mt-4 flex flex-wrap gap-2">
           <a href="/api/openapi" className="btn btn-secondary" target="_blank" rel="noreferrer">
-            OpenAPI JSON
+            OpenAPI
           </a>
           <a href="/api/health" className="btn btn-secondary" target="_blank" rel="noreferrer">
-            Health check
+            Health
           </a>
           <Link href="/app/connectors" className="btn btn-secondary">
             Connectors
@@ -291,7 +243,6 @@ export default async function DevelopersPage({
 
         <section className="card p-5">
           <h2 className="app-h">Register webhook</h2>
-          <p className="app-sub">Your system receives POSTs when invoices move through Custara.</p>
           <form action={createWebhook} className="mt-4 space-y-4">
             <div>
               <label className="mb-1.5 block text-[0.78rem] font-semibold" htmlFor="whUrl">
@@ -397,10 +348,7 @@ export default async function DevelopersPage({
       </section>
 
       <section className="card mb-5 p-5">
-        <h2 className="app-h">Dev guide · quickstart</h2>
-        <p className="app-sub">
-          Export your key, then call the Partner API. Prefer <code>Idempotency-Key</code> on every write.
-        </p>
+        <h2 className="app-h">Quickstart</h2>
         <pre className="mt-4 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{`export CUSTARA_API_KEY="cst_live_…"
 export CUSTARA_BASE="${baseUrl}"`}</pre>
 

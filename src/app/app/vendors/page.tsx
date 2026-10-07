@@ -3,18 +3,48 @@ import { revalidatePath } from "next/cache";
 import { requireSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/app/AppShell";
+import { SectionTabs } from "@/components/app/SectionTabs";
+import { VendorPortalPanel } from "@/components/app/VendorPortalPanel";
 import { formatDate, formatMoney } from "@/lib/format";
 import { addDestination } from "@/domain/arc/allowlist";
 import { writeAudit } from "@/lib/audit";
 import { encryptField, last4 } from "@/lib/crypto";
 import { upsertVendorPurchaseOrder } from "@/domain/contracts";
 
-export default async function VendorsPage() {
+export default async function VendorsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; created?: string; error?: string; link?: string }>;
+}) {
   let user;
   try {
     user = await requireSessionUser(undefined, "vendors:read");
   } catch {
     redirect("/login");
+  }
+
+  const params = await searchParams;
+  const tab = params.tab === "portal" ? "portal" : "directory";
+  const tabs = [
+    { id: "directory", label: "Directory", href: "/app/vendors" },
+    { id: "portal", label: "Portal", href: "/app/vendors?tab=portal" },
+  ];
+
+  if (tab === "portal") {
+    try {
+      await requireSessionUser(["admin"], "connectors:write");
+    } catch {
+      redirect("/app/vendors");
+    }
+    return (
+      <AppShell user={user} title="Vendors">
+        <SectionTabs tabs={tabs} active="portal" />
+        <VendorPortalPanel
+          organizationId={user.organizationId}
+          params={{ created: params.created, error: params.error, link: params.link }}
+        />
+      </AppShell>
+    );
   }
 
   const vendors = await prisma.vendor.findMany({
@@ -149,9 +179,9 @@ export default async function VendorsPage() {
     <AppShell
       user={user}
       title="Vendors"
-      subtitle="Endpoints · purchase orders · Arc USDC"
     >
-      <div className="space-y-4">
+      <SectionTabs tabs={tabs} active="directory" />
+      <div className="mt-5 space-y-4">
         {vendors.map((vendor) => {
           const activeArc = vendor.endpoints.find((e) => e.isActive && e.endpointType === "arc_usdc");
           const activeBank = vendor.endpoints.find((e) => e.isActive && e.endpointType === "bank");

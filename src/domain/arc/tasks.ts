@@ -118,7 +118,15 @@ async function executeArcTransferTask(taskId: string) {
       actorType: "system",
     });
     if (!agent.circleWalletId) throw new Error("Agent wallet missing circleWalletId");
+    const { allowSimulatedArc } = await import("./config");
+    if (agent.provider === "sandbox" && !allowSimulatedArc()) {
+      throw new Error(
+        "Agent wallet is simulated. Upgrade to Circle testnet agent in Wallets before paying.",
+      );
+    }
 
+    // Unique per agent-task attempt so retries never reuse a burned Circle idempotency key.
+    const attempt = Math.max(1, task.attempts || 1);
     const transfer = await createUsdcTransfer({
       mode,
       walletId: agent.circleWalletId,
@@ -126,12 +134,12 @@ async function executeArcTransferTask(taskId: string) {
       provider: agent.provider,
       destinationAddress: destination,
       amount: intent.amount,
-      idempotencyKey: `arc-transfer-${intent.id}`,
+      idempotencyKey: `arc-transfer-${intent.id}-${task.id}-a${attempt}`,
     });
 
     await prisma.agentTask.update({
       where: { id: task.id },
-      data: { circleTxId: transfer.id, txHash: transfer.txHash || null },
+      data: { circleTxId: transfer.id, txHash: transfer.txHash || null, error: null },
     });
 
     const failed = ["FAILED", "CANCELLED", "DENIED"].includes(transfer.state.toUpperCase());
@@ -151,6 +159,9 @@ async function executeArcTransferTask(taskId: string) {
     }
 
     const terminal = ["COMPLETE", "COMPLETED", "CONFIRMED"].includes(transfer.state.toUpperCase());
+    const initiated = ["INITIATED", "PENDING", "QUEUED", "SENT", "STAGED", "CLEARING"].includes(
+      transfer.state.toUpperCase(),
+    );
     await prisma.paymentIntent.update({
       where: { id: intent.id },
       data: {
@@ -158,6 +169,7 @@ async function executeArcTransferTask(taskId: string) {
         providerRef: transfer.id,
         circleTxId: transfer.id,
         txHash: transfer.txHash || null,
+        failureReason: null,
       },
     });
 
@@ -178,10 +190,13 @@ async function executeArcTransferTask(taskId: string) {
         state: transfer.state,
         destination,
         amount: intent.amount,
+        provider: transfer.provider,
+        attempt,
       },
     });
 
-    if (terminal) {
+    // Poll reconcile for terminal or in-flight Circle states (webhooks may be absent in local).
+    if (terminal || initiated) {
       await enqueueAgentTask({
         organizationId: task.organizationId,
         type: "arc_reconcile",
@@ -191,16 +206,75 @@ async function executeArcTransferTask(taskId: string) {
     }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Arc transfer failed";
+    await prisma.agentTask.update({
+      where: { id: task.id },
+      data: { error: message.slice(0, 1000) },
+    });
     const current = await prisma.paymentIntent.findUnique({ where: { id: intent.id } });
-    if (current && current.status !== "completed" && current.status !== "failed") {
+    if (current && current.status !== "completed") {
       await prisma.paymentIntent.update({
         where: { id: intent.id },
-        data: { status: "failed", failureReason: message },
+        data: { status: "failed", failureReason: message.slice(0, 1000) },
       });
-      await markInvoicePaymentFailed(intent.invoiceId, message);
+      await markInvoicePaymentFailed(intent.invoiceId, message.slice(0, 500));
     }
     throw e;
   }
+}
+
+/** Re-queue a failed Arc payment intent for another on-chain attempt. */
+export async function retryFailedArcPayment(input: {
+  organizationId: string;
+  paymentIntentId: string;
+  actorId?: string;
+}) {
+  if (input.actorId) {
+    const actor = await prisma.workspaceUser.findUniqueOrThrow({ where: { id: input.actorId } });
+    if (!actor.mfaEnabled || !actor.mfaSecretEnc) {
+      const { MFA_SETUP_REQUIRED_CODE } = await import("@/domain/payStepUp");
+      throw new Error(
+        `${MFA_SETUP_REQUIRED_CODE}: Set up MFA before sending payments. Open Security to enable authenticator protection.`,
+      );
+    }
+  }
+
+  const intent = await prisma.paymentIntent.findFirst({
+    where: { id: input.paymentIntentId, organizationId: input.organizationId },
+  });
+  if (!intent) throw new Error("Payment intent not found");
+  if (intent.rail !== "arc_usdc") throw new Error("Only Arc USDC intents can be retried here");
+  if (intent.status === "completed" || intent.txHash) {
+    // Idempotent — UI may still show Retry briefly after settle.
+    return { intent, task: null as null, alreadyCompleted: true as const };
+  }
+
+  await prisma.paymentIntent.update({
+    where: { id: intent.id },
+    data: { status: "pending_transfer", failureReason: null },
+  });
+  await prisma.invoice.update({
+    where: { id: intent.invoiceId },
+    data: { status: "payment_queued", explanation: null },
+  });
+
+  const task = await enqueueAgentTask({
+    organizationId: input.organizationId,
+    type: "arc_transfer",
+    paymentIntentId: intent.id,
+    payload: { invoiceId: intent.invoiceId, retry: true },
+  });
+
+  await writeAudit({
+    organizationId: input.organizationId,
+    actorType: "user",
+    actorId: input.actorId,
+    action: "payment.retry_arc_transfer",
+    entityType: "payment_intent",
+    entityId: intent.id,
+    metadata: { agentTaskId: task.id },
+  });
+
+  return { intent, task, alreadyCompleted: false as const };
 }
 
 async function executeArcReconcileTask(taskId: string) {

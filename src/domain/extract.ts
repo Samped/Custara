@@ -14,6 +14,159 @@ function parseLooseJson(text: string): Record<string, unknown> | null {
   }
 }
 
+function parseMoneyToken(raw: string): number | null {
+  const cleaned = raw.replace(/[^\d.,-]/g, "").replace(/,/g, "");
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+const MONTHS: Record<string, string> = {
+  jan: "01",
+  january: "01",
+  feb: "02",
+  february: "02",
+  mar: "03",
+  march: "03",
+  apr: "04",
+  april: "04",
+  may: "05",
+  jun: "06",
+  june: "06",
+  jul: "07",
+  july: "07",
+  aug: "08",
+  august: "08",
+  sep: "09",
+  sept: "09",
+  september: "09",
+  oct: "10",
+  october: "10",
+  nov: "11",
+  november: "11",
+  dec: "12",
+  december: "12",
+};
+
+/** Normalize common invoice date strings to YYYY-MM-DD. */
+export function parseFlexibleDate(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+
+  const named = s.match(/^([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/);
+  if (named) {
+    const month = MONTHS[named[1].toLowerCase()];
+    if (month) return `${named[3]}-${month}-${named[2].padStart(2, "0")}`;
+  }
+
+  const namedAlt = s.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+),?\s+(\d{4})$/);
+  if (namedAlt) {
+    const month = MONTHS[namedAlt[2].toLowerCase()];
+    if (month) return `${namedAlt[3]}-${month}-${namedAlt[1].padStart(2, "0")}`;
+  }
+
+  // US-style MM/DD/YYYY when first segment ≤ 12
+  const slash = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (slash) {
+    const a = Number(slash[1]);
+    const b = Number(slash[2]);
+    if (a > 12 && b <= 12) {
+      // DD/MM/YYYY
+      return `${slash[3]}-${slash[2].padStart(2, "0")}-${slash[1].padStart(2, "0")}`;
+    }
+    return `${slash[3]}-${slash[1].padStart(2, "0")}-${slash[2].padStart(2, "0")}`;
+  }
+
+  const t = Date.parse(s);
+  if (!Number.isNaN(t)) {
+    return new Date(t).toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+function detectCurrency(text: string, explicit?: string | null): string {
+  if (explicit) return explicit.toUpperCase();
+  const labeled = text.match(/Currency:\s*([A-Z]{3,4})/i)?.[1];
+  if (labeled) return labeled.toUpperCase();
+  if (/₦|NGN\b/i.test(text)) return "NGN";
+  if (/€|EUR\b/.test(text)) return "EUR";
+  if (/£|GBP\b/.test(text)) return "GBP";
+  if (/\$|USD\b|USDC\b/.test(text)) return "USD";
+  return "USD";
+}
+
+function guessVendorName(text: string): string | null {
+  const labeled =
+    text.match(/Vendor:\s*(.+)/i)?.[1]?.trim() ||
+    text.match(/From:\s*(.+)/i)?.[1]?.trim() ||
+    text.match(/Supplier:\s*(.+)/i)?.[1]?.trim() ||
+    text.match(/Account Name:\s*(.+)/i)?.[1]?.trim();
+  if (labeled && !/^unknown/i.test(labeled)) return labeled.split("\n")[0].trim();
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const skip =
+    /^(invoice|tax\s*invoice|bill\s*to|ship\s*to|description|qty|quantity|amount|payment|project|date|due|total|subtotal|page|notes?)\b/i;
+  const addressLike = /^(\d+|phone:|email:|tel:|fax:|www\.|http|p\.?o\.?\s*box)/i;
+  const companyHint =
+    /\b(corp|corporation|inc|llc|ltd|limited|gmbh|plc|co\.|company|services|solutions|labs?)\b/i;
+
+  // Prefer a company-like line before BILL TO / invoice body
+  const billIdx = lines.findIndex((l) => /^bill\s*to\b/i.test(l));
+  const scan = billIdx > 0 ? lines.slice(0, billIdx) : lines.slice(0, 12);
+
+  for (const line of scan) {
+    if (line.length < 3 || line.length > 80) continue;
+    if (skip.test(line) || addressLike.test(line)) continue;
+    if (/^invoice\s*#/i.test(line)) continue;
+    if (companyHint.test(line) || /^[A-Z][A-Za-z0-9&'’.\- ]{2,}$/.test(line)) {
+      if (!/^\d+$/.test(line) && line.toUpperCase() !== "INVOICE" && line.length > 2) {
+        // Skip ultra-short logo initials like "AC"
+        if (line.length <= 3 && line === line.toUpperCase()) continue;
+        return line;
+      }
+    }
+  }
+  return null;
+}
+
+function extractInvoiceNumber(text: string): string | null {
+  return (
+    text.match(/Invoice\s*(?:Number|No\.?|#)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/]+)/i)?.[1]?.trim() ||
+    text.match(/\bINV[-\s]?([A-Z0-9\-\/]+)/i)?.[0]?.trim() ||
+    null
+  );
+}
+
+function extractTotalAmount(text: string): number | null {
+  const patterns = [
+    /Total\s*Due\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+    /Amount\s*Due\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+    /Grand\s*Total\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+    /Balance\s*Due\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+    /Total\s*(?:Amount)?\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m) {
+      const n = parseMoneyToken(m[1]);
+      if (n != null && n > 0) return n;
+    }
+  }
+  return null;
+}
+
+function extractLabeledMoney(text: string, label: RegExp): number | null {
+  const m = text.match(label);
+  if (!m) return null;
+  return parseMoneyToken(m[1]);
+}
+
 function deterministicExtract(payload: Record<string, unknown>): Extraction {
   const lineItems = Array.isArray(payload.line_items)
     ? (payload.line_items as Extraction["lineItems"])
@@ -43,34 +196,72 @@ function deterministicExtract(payload: Record<string, unknown>): Extraction {
   });
 }
 
-function extractFromText(text: string): Extraction | null {
-  const vendor = text.match(/Vendor:\s*(.+)/i)?.[1]?.trim();
-  const invoiceNumber = text.match(/Invoice\s*(?:Number|#):\s*(\S+)/i)?.[1]?.trim();
-  const total = text.match(/Total:\s*([0-9,.]+)/i)?.[1]?.replace(/,/g, "");
-  const currency = text.match(/Currency:\s*([A-Z]{3})/i)?.[1] || "NGN";
-  const accountNumber = text.match(/Account(?: Number)?:\s*(\d+)/i)?.[1];
-  const accountName = text.match(/Account Name:\s*(.+)/i)?.[1]?.trim();
-  const bankName = text.match(/Bank:\s*(.+)/i)?.[1]?.trim();
-  const dueDate = text.match(/Due(?: Date)?:\s*(\d{4}-\d{2}-\d{2})/i)?.[1];
-  const issueDate = text.match(/Issue(?: Date)?:\s*(\d{4}-\d{2}-\d{2})/i)?.[1];
-  const poNumber = text.match(/PO(?: Number)?:\s*(\S+)/i)?.[1];
+/**
+ * Heuristic text extractor for labeled fixtures and real-world PDF layouts.
+ * Exported for unit tests.
+ */
+export function extractFromText(text: string): Extraction | null {
+  const vendorName = guessVendorName(text);
+  const invoiceNumber = extractInvoiceNumber(text);
+  const totalAmount = extractTotalAmount(text);
 
-  if (!vendor || !invoiceNumber || !total) return null;
+  if (!vendorName || !invoiceNumber || totalAmount == null) return null;
+
+  const currency = detectCurrency(
+    text,
+    text.match(/Currency:\s*([A-Z]{3,4})/i)?.[1] || null,
+  );
+
+  const issueRaw =
+    text.match(/(?:^|\n)\s*(?:Issue(?:\s*Date)?|Invoice\s*Date)\s*:\s*([^\n]+)/im)?.[1]?.trim() ||
+    text.match(/(?:^|\n)\s*Date\s*:\s*([^\n]+)/im)?.[1]?.trim() ||
+    text.match(/Issue(?: Date)?:\s*(\d{4}-\d{2}-\d{2})/i)?.[1];
+  const dueRaw =
+    text.match(/(?:^|\n)\s*Due(?:\s*Date)?\s*:\s*([^\n]+)/im)?.[1]?.trim() ||
+    text.match(/Due(?: Date)?:\s*(\d{4}-\d{2}-\d{2})/i)?.[1];
+
+  const cleanDateField = (v?: string | null) =>
+    v ? v.replace(/\s{2,}.*/, "").trim() : null;
+
+  const accountNumber =
+    text.match(/Account(?:\s*Number)?\s*:\s*([0-9]{6,})/i)?.[1] ||
+    text.match(/Account(?: Number)?:\s*(\d+)/i)?.[1];
+  const accountName = text.match(/Account Name:\s*(.+)/i)?.[1]?.trim()?.split("\n")[0];
+  const bankName = text.match(/Bank:\s*(.+)/i)?.[1]?.trim()?.split("\n")[0];
+  const bankCode =
+    text.match(/(?:Bank Code|Routing(?:\s*Number)?|Sort Code)\s*:\s*([A-Z0-9\-]+)/i)?.[1] || null;
+  const poNumber =
+    text.match(/PO(?:\s*Number)?\s*:\s*(\S+)/i)?.[1] ||
+    text.match(/Purchase Order\s*:\s*(\S+)/i)?.[1] ||
+    null;
+  const arcAddress = text.match(/Arc Address:\s*(0x[a-fA-F0-9]{40})/i)?.[1]?.toLowerCase();
+
+  const subtotal = extractLabeledMoney(text, /Subtotal\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i);
+  const taxAmount = extractLabeledMoney(
+    text,
+    /Tax(?:\s*\([^)]*\))?\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+  );
+
+  // Labeled fixture format used higher confidence; layout PDFs slightly lower
+  const labeled = /Vendor:\s*.+/i.test(text) && /Total:\s*[0-9,.]+/i.test(text);
 
   return extractionSchema.parse({
-    vendorName: vendor,
+    vendorName,
     invoiceNumber,
-    issueDate: issueDate || null,
-    dueDate: dueDate || null,
+    issueDate: parseFlexibleDate(cleanDateField(issueRaw)),
+    dueDate: parseFlexibleDate(cleanDateField(dueRaw)),
     currency,
-    totalAmount: Number(total),
+    subtotal,
+    taxAmount,
+    totalAmount,
     poNumber: poNumber || null,
     accountName: accountName || null,
     accountNumber: accountNumber || null,
     bankName: bankName || null,
-    bankCode: null,
+    bankCode,
+    arcAddress: arcAddress || null,
     lineItems: [],
-    confidence: 0.8,
+    confidence: labeled ? 0.8 : 0.72,
   });
 }
 
@@ -157,11 +348,17 @@ async function maybeLlmVisionExtract(buf: Buffer, mimeType: string): Promise<Ext
 
 async function extractPdfText(buf: Buffer): Promise<string> {
   try {
-    const { PDFParse } = await import("pdf-parse");
-    const parser = new PDFParse({ data: buf });
+    // Force Node build — Turbopack can resolve the browser export otherwise.
+    const mod = await import(/* webpackIgnore: true */ "pdf-parse");
+    const PDFParse = (mod as { PDFParse?: new (opts: { data: Buffer }) => { getText: () => Promise<{ text?: string }>; destroy?: () => Promise<void> } }).PDFParse;
+    if (!PDFParse) throw new Error("pdf-parse PDFParse export missing");
+    const parser = new PDFParse({ data: Buffer.from(buf) });
     const result = await parser.getText();
-    return (result?.text || "").trim();
-  } catch {
+    const text = (result?.text || "").trim();
+    await parser.destroy?.();
+    return text;
+  } catch (err) {
+    console.warn("[custara] extractPdfText failed", err instanceof Error ? err.message : err);
     return "";
   }
 }

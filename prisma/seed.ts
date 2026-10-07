@@ -50,6 +50,7 @@ async function main() {
       businessType: "company",
       industry: "Wholesale & distribution",
       country: "NG",
+      displayCurrency: "NGN",
       ingestEmail: "invoices+lagos-distribution@ingest.custara.local",
       onboardingCompletedAt: new Date(),
       privacyMode: true,

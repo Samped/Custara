@@ -4,6 +4,8 @@ import { BrandLogo } from "./BrandLogo";
 import { NavMenu } from "./NavMenu";
 import { ThemeToggle } from "./ThemeProvider";
 import { PageAtmosphere } from "./GridAtmosphere";
+import { CurrencyToggle } from "./CurrencyToggle";
+import { MfaBanner } from "./MfaBanner";
 
 export function AppShell({
   user,
@@ -33,7 +35,10 @@ export function AppShell({
               <NavMenu />
             </div>
             <div className="flex items-center gap-2 text-[0.78rem]">
-              <span className="badge bg-accent-soft text-accent">{user.paymentMode}</span>
+              <span className="badge bg-accent-soft text-accent">
+                {user.paymentMode === "live" ? "live rails" : "simulated"}
+              </span>
+              <CurrencyToggle value={user.displayCurrency} />
               <ThemeToggle />
               <div className="user-chip">
                 <p className="user-chip-name">{user.name}</p>
@@ -51,6 +56,7 @@ export function AppShell({
         </header>
 
         <main className="shell app-main">
+          {!user.mfaEnabled && title !== "Security" ? <MfaBanner /> : null}
           <header className="app-page-head">
             <h1 className="page-title">{title}</h1>
             {subtitle ? <p className="page-subtitle">{subtitle}</p> : null}

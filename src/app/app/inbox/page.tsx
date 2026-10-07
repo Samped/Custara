@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSessionUser } from "@/lib/auth";
+import { roleHasCapability } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/app/AppShell";
 import { formatDate, formatMoney, statusBadgeClass } from "@/lib/format";
-import { syncMailboxAction, uploadInvoiceAction } from "../actions";
+import { syncMailboxAction } from "../actions";
+import { InvoiceUploadForm } from "@/components/app/InvoiceUploadForm";
 import { ensureMailboxConnector } from "@/domain/mailbox";
 
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulk?: string; failed?: string; mailbox?: string }>;
+  searchParams: Promise<{ bulk?: string; failed?: string; mailbox?: string; upload?: string; msg?: string }>;
 }) {
   let user;
   try {
@@ -20,6 +22,8 @@ export default async function InboxPage({
   }
 
   const params = await searchParams;
+  const canUpload = roleHasCapability(user.role, "inbox:write");
+
   await ensureMailboxConnector(user.organizationId).catch(() => null);
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: user.organizationId },
@@ -38,7 +42,7 @@ export default async function InboxPage({
   });
 
   return (
-    <AppShell user={user} title="Inbox" subtitle="Upload · CSV · email · API">
+    <AppShell user={user} title="Inbox">
       <div className="dash">
         {params.bulk ? (
           <p className="dash-sub">
@@ -47,29 +51,27 @@ export default async function InboxPage({
           </p>
         ) : null}
         {params.mailbox === "synced" ? <p className="dash-sub">Mailbox sync finished</p> : null}
+        {params.upload === "missing" ? <p className="dash-sub text-danger">Choose a file to upload</p> : null}
+        {params.upload === "error" && params.msg ? (
+          <p className="dash-sub text-danger">{decodeURIComponent(params.msg)}</p>
+        ) : null}
 
         <section className="dash-panel">
           <div className="dash-panel-head">
             <div>
               <p className="dash-kicker">Ingest</p>
               <h2 className="dash-h">Upload</h2>
-              <p className="dash-sub">JSON, PDF, text, or CSV bulk</p>
+              <p className="dash-sub">{canUpload ? "PDF, JSON, CSV" : "Read-only"}</p>
             </div>
-            <a href="/api/v1/invoices/csv-template" className="dash-link">
-              CSV template
-            </a>
+            {canUpload ? (
+              <a href="/api/v1/invoices/csv-template" className="dash-link">
+                CSV template
+              </a>
+            ) : null}
           </div>
-          <form action={uploadInvoiceAction} className="dash-upload mt-3">
-            <input
-              type="file"
-              name="file"
-              accept=".json,.txt,.pdf,.csv,.tsv,application/json,text/plain,text/csv"
-              required
-            />
-            <button type="submit" className="btn btn-primary">
-              Analyze
-            </button>
-          </form>
+          {canUpload ? (
+            <InvoiceUploadForm className="dash-upload mt-3" buttonLabel="Analyze" />
+          ) : null}
         </section>
 
         <section className="dash-panel">
@@ -97,9 +99,7 @@ export default async function InboxPage({
               ) : null}
             </div>
           </div>
-          <p className="dash-mini-meta mt-2">
-            Status: {mailbox?.status || "not set"} · attachments only (body discarded)
-          </p>
+          <p className="dash-mini-meta mt-2">Status: {mailbox?.status || "not set"}</p>
         </section>
 
         <section className="dash-panel dash-panel-flush">

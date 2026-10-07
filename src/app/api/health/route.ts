@@ -24,6 +24,9 @@ export async function GET() {
       checks,
       gates: {
         arc_payments_live: process.env.ARC_PAYMENTS_LIVE === "true",
+        arc_allow_live_on_testnet: process.env.ARC_ALLOW_LIVE_ON_TESTNET === "true",
+        arc_allow_simulated: process.env.ARC_ALLOW_SIMULATED === "true",
+        arc_chain: process.env.ARC_CHAIN || "ARC-TESTNET",
         nigeria_payment_live: process.env.NIGERIA_PAYMENT_LIVE === "true",
         xero_configured: Boolean(process.env.XERO_CLIENT_ID && process.env.XERO_CLIENT_SECRET),
         oidc_configured: Boolean(process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID),
@@ -35,6 +38,7 @@ export async function GET() {
         circle_dev_wallets: Boolean(
           process.env.CIRCLE_API_KEY?.trim() && process.env.CIRCLE_ENTITY_SECRET?.trim(),
         ),
+        circle_entity_ciphertext: Boolean(process.env.CIRCLE_ENTITY_SECRET_CIPHERTEXT?.trim()),
         storage_backend: process.env.STORAGE_BACKEND || "local",
       },
     },

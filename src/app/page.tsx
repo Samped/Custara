@@ -7,18 +7,18 @@ import { BrandDot, PageAtmosphere } from "@/components/app/GridAtmosphere";
 const features = [
   {
     index: "01",
-    title: "Accounts payable intelligence",
-    body: "Extract, match, and score risk with confidence and clear evidence.",
+    title: "Accounts payable",
+    body: "Ingest, extract, and risk-score invoices with clear evidence.",
   },
   {
     index: "02",
-    title: "Controlled payment execution",
-    body: "Idempotent intents, frozen beneficiaries, and sandbox-to-live rails.",
+    title: "Controlled disbursement",
+    body: "Policy checks, dual control, and idempotent payment intents.",
   },
   {
     index: "03",
     title: "Enterprise controls",
-    body: "Versioned policies, encrypted bank details, and append-only audit.",
+    body: "Versioned policies, encrypted credentials, and append-only audit.",
   },
 ];
 
@@ -34,7 +34,7 @@ export default async function HomePage() {
             <ThemeToggle />
             {user ? (
               <Link href="/app" className="btn btn-secondary">
-                Open console
+                Open workspace
               </Link>
             ) : (
               <Link href="/login" className="btn btn-secondary">
@@ -46,31 +46,25 @@ export default async function HomePage() {
       </header>
 
       <main className="shell pb-24 pt-16 md:pb-32 md:pt-24">
-        <p className="eyebrow">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-          B2B Finance Agent
-        </p>
-
-        <h1 className="mt-5 max-w-[18ch] font-[family-name:var(--font-display)] text-[2.6rem] font-semibold leading-[1.05] tracking-[-0.05em] text-foreground md:text-[3.5rem]">
+        <h1 className="max-w-[18ch] font-[family-name:var(--font-display)] text-[2.6rem] font-semibold leading-[1.05] tracking-[-0.05em] text-foreground md:text-[3.5rem]">
           Custara
           <BrandDot />
         </h1>
 
-        <p className="mt-4 max-w-[28rem] font-[family-name:var(--font-display)] text-[1.35rem] font-medium leading-[1.25] tracking-[-0.03em] text-foreground md:text-[1.55rem]">
-          Privacy-first AP and cash operations for companies and fintechs.
+        <p className="mt-5 max-w-[22rem] font-[family-name:var(--font-display)] text-[1.4rem] font-medium leading-[1.2] tracking-[-0.035em] text-foreground md:max-w-[28rem] md:text-[1.65rem]">
+          From vendor invoice to authorized payment.
         </p>
-
-        <p className="mt-5 max-w-[32rem] text-[0.98rem] leading-relaxed text-muted">
-          Verify invoices against policy, enforce maker-checker approvals, and authorize payment only when
-          controls clear — never unconstrained auto-pay.
+        <p className="mt-4 max-w-[30rem] text-[0.95rem] leading-relaxed text-muted">
+          Extract and risk-score every bill, enforce dual-control approvals, then settle only when
+          policy clears — with a complete audit trail.
         </p>
 
         <div className="mt-9 flex flex-wrap items-center gap-5">
           <Link href="/login" className="btn btn-black">
-            Open company console
+            Sign in
           </Link>
           <Link href="/app/developers" className="btn btn-link-pro">
-            Partner API →
+            API →
           </Link>
         </div>
 

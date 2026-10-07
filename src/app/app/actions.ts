@@ -3,61 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { canApprove, canPay, requireSessionUser } from "@/lib/auth";
-import { ingestInvoice } from "@/domain/ingest";
-import { runInvoicePipeline, decideApproval } from "@/domain/pipeline";
+import { decideApproval } from "@/domain/pipeline";
 import { createPaymentIntent } from "@/domain/payment";
 import { reconcileSettlement } from "@/domain/cash";
 
 export async function uploadInvoiceAction(formData: FormData) {
-  const user = await requireSessionUser(["admin", "payer", "approver"], "inbox:read");
+  const user = await requireSessionUser(undefined, "inbox:write");
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     throw new Error("File required");
   }
-
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const name = file.name.toLowerCase();
-  const isJson = file.type.includes("json") || name.endsWith(".json");
-  const isCsv = file.type.includes("csv") || name.endsWith(".csv") || name.endsWith(".tsv");
-
-  if (isCsv) {
-    const { ingestCsvRows } = await import("@/domain/csvIngest");
-    const result = await ingestCsvRows({
-      organizationId: user.organizationId,
-      actorType: "user",
-      actorId: user.id,
-      text: bytes.toString("utf8"),
-      sync: true,
-    });
-    revalidatePath("/app");
-    revalidatePath("/app/inbox");
-    if (result.results.length === 1) {
-      redirect(`/app/invoices/${result.results[0].id}`);
-    }
-    redirect(`/app/inbox?bulk=${result.ingested}&failed=${result.failed}`);
-  }
-
-  let structuredPayload: Record<string, unknown> | null = null;
-  if (isJson) {
-    structuredPayload = JSON.parse(bytes.toString("utf8")) as Record<string, unknown>;
-  }
-
-  const invoice = await ingestInvoice({
-    organizationId: user.organizationId,
-    actorType: "user",
-    actorId: user.id,
-    source: "upload",
-    filename: file.name,
-    mimeType: file.type || (isJson ? "application/json" : "application/octet-stream"),
-    bytes: isJson ? null : bytes,
-    structuredPayload,
-    enqueue: false,
-  });
-
-  await runInvoicePipeline(invoice.id, { type: "user", id: user.id });
-  revalidatePath("/app");
-  revalidatePath("/app/inbox");
-  redirect(`/app/invoices/${invoice.id}`);
+  const { processInvoiceUpload } = await import("@/domain/uploadInvoice");
+  const { redirectTo } = await processInvoiceUpload(user, file);
+  redirect(redirectTo);
 }
 
 export async function syncMailboxAction() {
@@ -128,4 +86,36 @@ export async function reconcileAction(formData: FormData) {
 
   revalidatePath("/app/payments");
   revalidatePath(`/app/invoices/${invoiceId}`);
+}
+
+export async function verifyVendorAction(formData: FormData) {
+  const user = await requireSessionUser(["admin", "approver"], "approvals:write");
+  if (!canApprove(user.role)) throw new Error("Forbidden");
+  const invoiceId = String(formData.get("invoiceId") || "");
+  const { verifyVendorForInvoice } = await import("@/domain/vendorVerify");
+  await verifyVendorForInvoice({
+    organizationId: user.organizationId,
+    invoiceId,
+    actorId: user.id,
+  });
+  revalidatePath(`/app/invoices/${invoiceId}`);
+  revalidatePath("/app/approvals");
+  revalidatePath("/app/vendors");
+  revalidatePath("/app");
+  redirect(`/app/invoices/${invoiceId}`);
+}
+
+export async function confirmDestinationAction(formData: FormData) {
+  // Control decision on the invoice — no Wallets detour; admin / approver / payer.
+  const user = await requireSessionUser(["admin", "approver", "payer"]);
+  const invoiceId = String(formData.get("invoiceId") || "");
+  const { confirmInvoiceDestination } = await import("@/domain/arc/allowlist");
+  await confirmInvoiceDestination({
+    organizationId: user.organizationId,
+    invoiceId,
+    actorId: user.id,
+  });
+  revalidatePath(`/app/invoices/${invoiceId}`);
+  revalidatePath("/app/payments");
+  redirect(`/app/invoices/${invoiceId}`);
 }

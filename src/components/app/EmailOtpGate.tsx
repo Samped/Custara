@@ -9,7 +9,7 @@ const CircleEmailOtpLogin = dynamic(() => import("@/components/app/CircleEmailOt
     <div className="mt-7 space-y-4">
       <div className="login-skeleton h-10 w-full" />
       <div className="login-skeleton h-11 w-full" />
-      <p className="text-[0.78rem] text-muted">Preparing secure sign-in…</p>
+      <p className="text-[0.78rem] text-muted">Loading…</p>
     </div>
   ),
 });

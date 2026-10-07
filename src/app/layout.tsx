@@ -17,9 +17,8 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Custara — B2B Finance Agent",
-  description:
-    "Privacy-first AI accounts-payable and cash agent. Verify invoices against policy and require controlled authorization before any payment.",
+  title: "Custara",
+  description: "Accounts payable, approvals, and controlled disbursement.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },

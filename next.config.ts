@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Keep pdf-parse on the Node runtime (not the browser bundle) for PDF text extraction.
+  serverExternalPackages: ["pdf-parse"],
 };
 
 export default nextConfig;

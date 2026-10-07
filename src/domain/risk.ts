@@ -171,7 +171,7 @@ export async function assessRisks(
       risks.push({
         code: "destination_not_allowlisted",
         severity: "hard",
-        message: `Vendor wallet ${addr} is not on the organization allowlist — confirm before paying.`,
+        message: `Vendor wallet ${addr} is new to this workspace — confirm the destination on this invoice before paying.`,
         evidence: { address: addr },
       });
     }

@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import { cookies, headers } from "next/headers";
 import { prisma } from "./db";
 import { assertCapability, type AppCapability } from "./rbac";
+import { resolveDisplayCurrency } from "./currency";
 
 export type Role = "admin" | "approver" | "payer" | "viewer" | "auditor";
 
@@ -13,6 +14,8 @@ export type SessionUser = {
   organizationId: string;
   organizationName: string;
   paymentMode: string;
+  displayCurrency: string;
+  country: string | null;
   ssoEnforced: boolean;
   mfaEnabled: boolean;
 };
@@ -39,22 +42,7 @@ export function generateApiKey() {
 }
 
 export async function createSession(userId: string) {
-  const token = randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  const h = await headers();
-  await prisma.session.create({
-    data: {
-      userId,
-      tokenHash: hashToken(token),
-      expiresAt,
-      ip: h.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-      userAgent: h.get("user-agent")?.slice(0, 300) || null,
-    },
-  });
-  await prisma.workspaceUser.update({
-    where: { id: userId },
-    data: { lastLoginAt: new Date() },
-  });
+  const { token, expiresAt } = await createSessionToken(userId);
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -64,6 +52,35 @@ export async function createSession(userId: string) {
     expires: expiresAt,
   });
   cookieStore.delete(MFA_PENDING_COOKIE);
+}
+
+/** Create a session row and return the raw cookie token (for E2E / Playwright). */
+export async function createSessionToken(userId: string) {
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  let ip: string | null = null;
+  let userAgent: string | null = null;
+  try {
+    const h = await headers();
+    ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+    userAgent = h.get("user-agent")?.slice(0, 300) || null;
+  } catch {
+    // Outside a Next.js request (scripts / Playwright helpers)
+  }
+  await prisma.session.create({
+    data: {
+      userId,
+      tokenHash: hashToken(token),
+      expiresAt,
+      ip,
+      userAgent,
+    },
+  });
+  await prisma.workspaceUser.update({
+    where: { id: userId },
+    data: { lastLoginAt: new Date() },
+  });
+  return { token, expiresAt, cookieName: SESSION_COOKIE };
 }
 
 export async function setMfaPending(userId: string) {
@@ -120,6 +137,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     organizationId: session.user.organizationId,
     organizationName: session.user.organization.name,
     paymentMode: session.user.organization.paymentMode,
+    displayCurrency: resolveDisplayCurrency(session.user.organization),
+    country: session.user.organization.country,
     ssoEnforced: session.user.organization.ssoEnforced,
     mfaEnabled: session.user.mfaEnabled,
   };

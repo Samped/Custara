@@ -2,17 +2,72 @@ import { redirect } from "next/navigation";
 import { requireSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/app/AppShell";
+import { SectionTabs } from "@/components/app/SectionTabs";
 import { formatDate } from "@/lib/format";
 import { publishPolicyVersion, simulatePolicy, getActivePolicyVersion } from "@/domain/policy";
 import { PAYABLESAI_STRICT_RULES, type PolicyRules } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 
-export default async function PoliciesPage() {
+export default async function ControlsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   let user;
   try {
     user = await requireSessionUser(["admin", "auditor"], "policies:read");
   } catch {
     redirect("/login");
+  }
+
+  const params = await searchParams;
+  const tab = params.tab === "audit" ? "audit" : "policies";
+  const tabs = [
+    { id: "policies", label: "Policies", href: "/app/policies" },
+    { id: "audit", label: "Audit", href: "/app/policies?tab=audit" },
+  ];
+
+  if (tab === "audit") {
+    const events = await prisma.auditEvent.findMany({
+      where: { organizationId: user.organizationId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return (
+      <AppShell user={user} title="Controls">
+        <SectionTabs tabs={tabs} active="audit" />
+        <div className="dash-panel dash-panel-flush mt-5 overflow-hidden">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Action</th>
+                <th>Actor</th>
+                <th>Entity</th>
+                <th>Metadata</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((event) => (
+                <tr key={event.id}>
+                  <td className="whitespace-nowrap text-sm">{formatDate(event.createdAt)}</td>
+                  <td className="font-medium">{event.action}</td>
+                  <td className="app-sub">
+                    {event.actorType}
+                    {event.actorId ? ` · ${event.actorId.slice(0, 8)}` : ""}
+                  </td>
+                  <td className="app-sub">
+                    {event.entityType}
+                    {event.entityId ? ` · ${event.entityId.slice(0, 8)}` : ""}
+                  </td>
+                  <td className="max-w-xs truncate font-mono text-xs text-muted">{event.metadataJson}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </AppShell>
+    );
   }
 
   const active = await getActivePolicyVersion(user.organizationId);
@@ -76,11 +131,9 @@ export default async function PoliciesPage() {
     : null;
 
   return (
-    <AppShell
-      user={user}
-      title="Policies"
-      subtitle="Versioned rules · deterministic math"
-    >
+    <AppShell user={user} title="Controls">
+      <SectionTabs tabs={tabs} active="policies" />
+      <div className="mt-5">
       {active ? (
         <div className="card mb-5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -225,6 +278,7 @@ export default async function PoliciesPage() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </AppShell>
   );

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getCashForecast } from "@/domain/cash";
+import { convertAmount, resolveDisplayCurrency } from "@/lib/currency";
 
 const OPEN_INVOICE_STATUSES = [
   "approved",
@@ -18,10 +19,18 @@ export async function getDashboardSummary(organizationId: string) {
   const now = new Date();
   const since = new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000);
   since.setUTCHours(0, 0, 0, 0);
+  const paidSince = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: organizationId },
+    select: { displayCurrency: true, country: true },
+  });
+  const displayCurrency = resolveDisplayCurrency(org);
 
   const [
     forecast,
     invoiceStatusGroups,
+    openInvoicesForSum,
     pendingApprovals,
     pendingApprovalCount,
     paymentQueuedCount,
@@ -29,7 +38,7 @@ export async function getDashboardSummary(organizationId: string) {
     connectors,
     wallets,
     recentInvoicesForChart,
-    paidLast30,
+    paidLast30Invoices,
     apiKeyCount,
     webhookCount,
   ] = await Promise.all([
@@ -38,7 +47,14 @@ export async function getDashboardSummary(organizationId: string) {
       by: ["status"],
       where: { organizationId },
       _count: { _all: true },
-      _sum: { totalAmount: true },
+    }),
+    prisma.invoice.findMany({
+      where: {
+        organizationId,
+        status: { in: OPEN_INVOICE_STATUSES },
+        totalAmount: { not: null },
+      },
+      select: { totalAmount: true, currency: true },
     }),
     prisma.approvalRequest.findMany({
       where: { organizationId, status: "pending" },
@@ -54,7 +70,15 @@ export async function getDashboardSummary(organizationId: string) {
     }),
     prisma.invoice.findMany({
       where: { organizationId },
-      include: { vendor: true, risks: true },
+      include: {
+        vendor: true,
+        risks: true,
+        paymentIntents: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true, status: true, txHash: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
@@ -71,17 +95,16 @@ export async function getDashboardSummary(organizationId: string) {
     }),
     prisma.invoice.findMany({
       where: { organizationId, createdAt: { gte: since } },
-      select: { createdAt: true, totalAmount: true, status: true },
+      select: { createdAt: true, totalAmount: true, currency: true, status: true },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.invoice.aggregate({
+    prisma.invoice.findMany({
       where: {
         organizationId,
         status: { in: ["payment_sent", "reconciled", "settled"] },
-        updatedAt: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) },
+        updatedAt: { gte: paidSince },
       },
-      _sum: { totalAmount: true },
-      _count: { _all: true },
+      select: { totalAmount: true, currency: true },
     }),
     prisma.apiKey.count({
       where: { organizationId, revokedAt: null },
@@ -92,15 +115,21 @@ export async function getDashboardSummary(organizationId: string) {
   ]);
 
   const statusCounts: Record<string, number> = {};
-  let openInvoiceCount = 0;
-  let openInvoiceAmount = 0;
   for (const row of invoiceStatusGroups) {
     statusCounts[row.status] = row._count._all;
-    if (OPEN_INVOICE_STATUSES.includes(row.status)) {
-      openInvoiceCount += row._count._all;
-      openInvoiceAmount += row._sum.totalAmount || 0;
-    }
   }
+
+  const openInvoiceCount = openInvoicesForSum.length;
+  const openInvoiceAmount = openInvoicesForSum.reduce(
+    (acc, inv) => acc + convertAmount(inv.totalAmount || 0, inv.currency, displayCurrency),
+    0,
+  );
+
+  const paidLast30Count = paidLast30Invoices.length;
+  const paidLast30Amount = paidLast30Invoices.reduce(
+    (acc, inv) => acc + convertAmount(inv.totalAmount || 0, inv.currency, displayCurrency),
+    0,
+  );
 
   const activityByDay: { date: string; count: number; amount: number }[] = [];
   for (let i = 0; i < 14; i++) {
@@ -113,20 +142,21 @@ export async function getDashboardSummary(organizationId: string) {
     const idx = index.get(key);
     if (idx == null) continue;
     activityByDay[idx].count += 1;
-    activityByDay[idx].amount += inv.totalAmount || 0;
+    activityByDay[idx].amount += convertAmount(inv.totalAmount || 0, inv.currency, displayCurrency);
   }
 
   const treasury = wallets.find((w) => w.role === "treasury_external");
   const agent = wallets.find((w) => w.role === "agent");
 
   return {
+    displayCurrency,
     forecast,
     openInvoiceCount,
     openInvoiceAmount,
     pendingApprovalCount,
     paymentQueuedCount,
-    paidLast30Count: paidLast30._count._all,
-    paidLast30Amount: paidLast30._sum.totalAmount || 0,
+    paidLast30Count,
+    paidLast30Amount,
     statusCounts,
     pendingApprovals,
     recentInvoices,

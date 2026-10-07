@@ -1,11 +1,28 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSessionUser } from "@/lib/auth";
+import { roleHasCapability } from "@/lib/rbac";
 import { AppShell } from "@/components/app/AppShell";
 import { getDashboardSummary } from "@/domain/dashboard";
-import { formatDate, formatMoney, statusBadgeClass } from "@/lib/format";
-import { uploadInvoiceAction } from "./actions";
+import {
+  connectorStatusLabel,
+  connectorTypeLabel,
+  formatDate,
+  formatMoney,
+  paymentStatusLabel,
+  statusBadgeClass,
+} from "@/lib/format";
+import { InvoiceUploadForm } from "@/components/app/InvoiceUploadForm";
 import { DashboardActivityChart } from "@/components/app/DashboardActivityChart";
+import { ClickableRow } from "@/components/app/ClickableRow";
+
+function invoiceLabel(status: string) {
+  if (status === "pending_approval") return "Needs approval";
+  if (status === "payment_queued") return "Ready to pay";
+  if (status === "payment_sent" || status === "reconciled" || status === "settled") return "Paid";
+  if (status === "needs_review") return "Needs review";
+  return paymentStatusLabel(status);
+}
 
 export default async function DashboardPage() {
   let user;
@@ -15,98 +32,180 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  const canUpload = roleHasCapability(user.role, "inbox:write");
   const dash = await getDashboardSummary(user.organizationId);
-  const currency = dash.forecast.currency;
+  const currency = dash.displayCurrency || dash.forecast.currency;
+  const attentionCount = dash.pendingApprovalCount + dash.paymentQueuedCount;
+  const agentBal = dash.agentBalance;
+  const lowAgent = agentBal != null && agentBal < 5;
   const gapHint = dash.forecast.funding_gap_7d > 0 ? "Needs attention" : "Covered";
 
-  const kpis = [
+  const queue = [
+    {
+      label: "Approvals",
+      value: dash.pendingApprovalCount,
+      hint: dash.pendingApprovalCount ? "Pending" : "None",
+      href: "/app/approvals",
+      hot: dash.pendingApprovalCount > 0,
+    },
+    {
+      label: "Pay queue",
+      value: dash.paymentQueuedCount,
+      hint: dash.paymentQueuedCount ? "Ready" : "None",
+      href: "/app/payments",
+      hot: dash.paymentQueuedCount > 0,
+    },
     {
       label: "Open invoices",
-      value: String(dash.openInvoiceCount),
+      value: dash.openInvoiceCount,
       hint: formatMoney(dash.openInvoiceAmount, currency),
       href: "/app/inbox",
+      hot: false,
     },
     {
-      label: "Pending risk",
-      value: String(dash.pendingApprovalCount),
-      hint: "Approvals",
-      href: "/app/approvals",
-    },
-    {
-      label: "Awaiting pay",
-      value: String(dash.paymentQueuedCount),
-      hint: "Payment queue",
-      href: "/app/payments",
-    },
-    {
-      label: "Paid 30d",
-      value: String(dash.paidLast30Count),
-      hint: formatMoney(dash.paidLast30Amount, currency),
-      href: "/app/cash",
+      label: "Payment wallet",
+      value: agentBal != null ? formatMoney(agentBal, "USDC") : "—",
+      hint: lowAgent ? "Low balance" : "Balance",
+      href: "/app/payments?tab=wallets",
+      hot: lowAgent,
     },
   ];
 
   return (
-    <AppShell user={user} title={user.organizationName} subtitle="Operations overview">
-      <div className="dash">
-        <div className="dash-toolbar">
-          <Link href="/app/inbox" className="btn btn-primary">
-            Inbox
-          </Link>
-          <Link href="/app/approvals" className="btn btn-secondary">
-            Approvals
-          </Link>
-          <Link href="/app/developers" className="btn btn-secondary">
-            API
-          </Link>
-          <Link href="/app/connectors" className="btn btn-secondary">
-            Connectors
-          </Link>
-          <Link href="/app/wallets" className="btn btn-secondary">
-            Wallets
-          </Link>
-        </div>
-
-        <section className="dash-connect">
-          <div className="dash-connect-head">
-            <div>
-              <p className="dash-kicker">Integrate</p>
-              <h2 className="dash-h">Connect systems</h2>
-            </div>
-            <Link href="/app/developers" className="btn btn-primary">
-              Developer guide
-            </Link>
+    <AppShell
+      user={user}
+      title="Home"
+      subtitle={
+        attentionCount
+          ? `${attentionCount} pending`
+          : undefined
+      }
+    >
+      <div className="dash space-y-5">
+        <section className="dash-panel flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="dash-kicker">{user.organizationName}</p>
+            <h2 className="dash-h">Workspace</h2>
           </div>
-          <div className="dash-connect-grid">
-            <Link href="/app/developers" className="dash-mini">
-              <span className="dash-mini-label">API keys</span>
-              <span className="dash-mini-value">{dash.apiKeyCount}</span>
-              <span className="dash-mini-meta">Partner REST</span>
-            </Link>
-            <Link href="/app/developers" className="dash-mini">
-              <span className="dash-mini-label">Webhooks</span>
-              <span className="dash-mini-value">{dash.webhookCount}</span>
-              <span className="dash-mini-meta">Signed events</span>
-            </Link>
-            <Link href="/app/connectors" className="dash-mini">
-              <span className="dash-mini-label">Connect</span>
-              <span className="dash-mini-value">
-                {dash.connectedConnectorCount}/{dash.connectors.length || 0}
-              </span>
-              <span className="dash-mini-meta">Email · API · drop</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {canUpload ? (
+              <InvoiceUploadForm
+                className="inline-flex flex-col items-start"
+                accept=".json,.txt,.pdf,application/json,text/plain,application/pdf"
+                buttonLabel="Upload invoice"
+              />
+            ) : null}
+            <Link href="/app/developers" className="btn btn-secondary">
+              API
             </Link>
           </div>
         </section>
 
-        <div className="dash-kpi-grid">
-          {kpis.map((kpi) => (
-            <Link key={kpi.label} href={kpi.href} className="dash-kpi-card">
-              <span className="dash-mini-label">{kpi.label}</span>
-              <span className="dash-kpi-value">{kpi.value}</span>
-              <span className="dash-mini-meta">{kpi.hint}</span>
+        <section className="dash-kpi-grid">
+          {queue.map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={`dash-kpi-card ${item.hot ? "dash-kpi-card--hot" : ""}`}
+            >
+              <span className="dash-mini-label">{item.label}</span>
+              <span className="dash-kpi-value">{item.value}</span>
+              <span className="dash-mini-meta">{item.hint}</span>
             </Link>
           ))}
-        </div>
+        </section>
+
+        {dash.pendingApprovals.length > 0 ? (
+          <section className="dash-panel dash-panel-flush">
+            <div className="dash-panel-head dash-panel-pad">
+              <h2 className="dash-h">Needs approval</h2>
+              <Link href="/app/approvals" className="dash-link">
+                View all
+              </Link>
+            </div>
+            <ul className="dash-list">
+              {dash.pendingApprovals.slice(0, 5).map((req) => (
+                <li key={req.id}>
+                  <div className="min-w-0">
+                    <Link href={`/app/invoices/${req.invoiceId}`} className="dash-row-title">
+                      {req.invoice.invoiceNumber || req.invoiceId.slice(0, 10)}
+                    </Link>
+                    <p className="dash-mini-meta truncate">
+                      {req.invoice.vendor?.name || "Vendor"} ·{" "}
+                      {formatMoney(req.invoice.totalAmount, req.invoice.currency)}
+                    </p>
+                  </div>
+                  <span className="badge bg-amber-50 text-warn shrink-0">
+                    {req.approvedCount}/{req.requiredCount}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <section className="dash-panel dash-panel-flush">
+          <div className="dash-panel-head dash-panel-pad">
+            <h2 className="dash-h">Recent invoices</h2>
+            <div className="flex items-center gap-3">
+              <Link href="/app/receipts" className="dash-link">
+                Receipts
+              </Link>
+              <Link href="/app/inbox" className="dash-link">
+                Inbox
+              </Link>
+            </div>
+          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Vendor</th>
+                <th>Amount</th>
+                <th>Due</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dash.recentInvoices.map((invoice) => {
+                const latestPay = invoice.paymentIntents[0];
+                const href = latestPay
+                  ? `/app/receipts/${latestPay.id}`
+                  : `/app/invoices/${invoice.id}`;
+                return (
+                  <ClickableRow key={invoice.id} href={href}>
+                    <td>
+                      <Link href={href} className="dash-row-title">
+                        {invoice.invoiceNumber || invoice.id.slice(0, 10)}
+                      </Link>
+                      {latestPay ? (
+                        <p className="dash-mini-meta">
+                          Receipt · {paymentStatusLabel(latestPay.status)}
+                          {latestPay.txHash?.startsWith("0x") ? " · on-chain" : ""}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td>{invoice.vendor?.name || "—"}</td>
+                    <td>{formatMoney(invoice.totalAmount, invoice.currency)}</td>
+                    <td>{formatDate(invoice.dueDate)}</td>
+                    <td>
+                      <span className={`badge ${statusBadgeClass(invoice.status)}`}>
+                        {invoiceLabel(invoice.status)}
+                      </span>
+                    </td>
+                  </ClickableRow>
+                );
+              })}
+              {dash.recentInvoices.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="dash-empty-cell">
+                    No invoices
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </section>
 
         <div className="dash-split">
           <section className="dash-panel">
@@ -128,7 +227,9 @@ export default async function DashboardPage() {
             <div className="dash-panel-head">
               <div>
                 <h2 className="dash-h">Cash</h2>
-                <p className="dash-sub">{gapHint}</p>
+                <p className="dash-sub">
+                  {gapHint} · {currency}
+                </p>
               </div>
             </div>
             <dl className="dash-dl">
@@ -142,11 +243,11 @@ export default async function DashboardPage() {
               </div>
               <div>
                 <dt>Treasury</dt>
-                <dd>{dash.treasuryBalance != null ? `${dash.treasuryBalance} USDC` : "—"}</dd>
+                <dd>{dash.treasuryBalance != null ? formatMoney(dash.treasuryBalance, "USDC") : "—"}</dd>
               </div>
               <div>
                 <dt>Agent</dt>
-                <dd>{dash.agentBalance != null ? `${dash.agentBalance} USDC` : "—"}</dd>
+                <dd>{dash.agentBalance != null ? formatMoney(dash.agentBalance, "USDC") : "—"}</dd>
               </div>
             </dl>
             <Link href="/app/cash" className="btn btn-secondary mt-4 w-full text-center">
@@ -155,125 +256,60 @@ export default async function DashboardPage() {
           </section>
         </div>
 
-        <div className="dash-split">
-          <section className="dash-panel dash-panel-flush">
-            <div className="dash-panel-head dash-panel-pad">
-              <h2 className="dash-h">Pending</h2>
-              <Link href="/app/approvals" className="dash-link">
-                All
-              </Link>
-            </div>
-            {dash.pendingApprovals.length === 0 ? (
-              <p className="dash-empty">Clear</p>
-            ) : (
-              <ul className="dash-list">
-                {dash.pendingApprovals.map((req) => (
-                  <li key={req.id}>
-                    <div className="min-w-0">
-                      <Link href={`/app/invoices/${req.invoiceId}`} className="dash-row-title">
-                        {req.invoice.invoiceNumber || req.invoiceId.slice(0, 10)}
-                      </Link>
-                      <p className="dash-mini-meta truncate">
-                        {req.invoice.vendor?.name || "Vendor"} ·{" "}
-                        {formatMoney(req.invoice.totalAmount, req.invoice.currency)}
-                      </p>
-                    </div>
-                    <span className="badge bg-accent-soft text-accent shrink-0">
-                      {req.approvedCount}/{req.requiredCount}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="dash-panel dash-panel-flush">
-            <div className="dash-panel-head dash-panel-pad">
-              <h2 className="dash-h">Status</h2>
-              <Link href="/app/developers" className="dash-link">
-                Setup
-              </Link>
-            </div>
-            <ul className="dash-list">
-              <li>
-                <div>
-                  <p className="dash-row-title">Partner API</p>
-                  <p className="dash-mini-meta">Keys for ERP sync</p>
-                </div>
-                <span className={`badge ${dash.apiKeyCount ? "bg-accent-soft text-accent" : "bg-slate-100 text-muted"}`}>
-                  {dash.apiKeyCount || "—"}
-                </span>
-              </li>
-              <li>
-                <div>
-                  <p className="dash-row-title">Webhooks</p>
-                  <p className="dash-mini-meta">Outbound events</p>
-                </div>
-                <span className={`badge ${dash.webhookCount ? "bg-accent-soft text-accent" : "bg-slate-100 text-muted"}`}>
-                  {dash.webhookCount || "—"}
-                </span>
-              </li>
-              {dash.connectors.map((c) => (
-                <li key={c.id}>
-                  <div>
-                    <p className="dash-row-title capitalize">{c.type.replace(/_/g, " ")}</p>
-                    <p className="dash-mini-meta">{c.lastSyncAt ? formatDate(c.lastSyncAt) : "Idle"}</p>
-                  </div>
-                  <span className={`badge ${statusBadgeClass(c.status)}`}>{c.status}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </div>
-
         <section className="dash-panel dash-panel-flush">
           <div className="dash-panel-head dash-panel-pad">
-            <div>
-              <h2 className="dash-h">Invoices</h2>
-              <p className="dash-sub">Recent</p>
-            </div>
-            <form action={uploadInvoiceAction} className="dash-upload">
-              <input type="file" name="file" accept=".json,.txt,.pdf,application/json,text/plain" required />
-              <button type="submit" className="btn btn-primary">
-                Upload
-              </button>
-            </form>
+            <h2 className="dash-h">Integrations</h2>
+            <Link href="/app/connectors" className="dash-link">
+              Manage
+            </Link>
           </div>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Vendor</th>
-                <th>Amount</th>
-                <th>Due</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dash.recentInvoices.map((invoice) => (
-                <tr key={invoice.id}>
-                  <td>
-                    <Link href={`/app/invoices/${invoice.id}`} className="dash-row-title">
-                      {invoice.invoiceNumber || invoice.id.slice(0, 10)}
-                    </Link>
-                  </td>
-                  <td>{invoice.vendor?.name || "—"}</td>
-                  <td>{formatMoney(invoice.totalAmount, invoice.currency)}</td>
-                  <td>{formatDate(invoice.dueDate)}</td>
-                  <td>
-                    <span className={`badge ${statusBadgeClass(invoice.status)}`}>{invoice.status}</span>
-                  </td>
-                </tr>
-              ))}
-              {dash.recentInvoices.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="dash-empty-cell">
-                    No invoices yet
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+          <ul className="dash-list">
+            <li>
+              <div>
+                <p className="dash-row-title">API</p>
+                <p className="dash-mini-meta">Keys</p>
+              </div>
+              <span className={`badge ${dash.apiKeyCount ? "bg-accent-soft text-accent" : "bg-slate-100 text-muted"}`}>
+                {dash.apiKeyCount || "—"}
+              </span>
+            </li>
+            <li>
+              <div>
+                <p className="dash-row-title">Webhooks</p>
+                <p className="dash-mini-meta">Outbound</p>
+              </div>
+              <span
+                className={`badge ${dash.webhookCount ? "bg-accent-soft text-accent" : "bg-slate-100 text-muted"}`}
+              >
+                {dash.webhookCount || "—"}
+              </span>
+            </li>
+            {dash.connectors.map((c) => {
+              const setupHint =
+                c.type === "mailbox_imap"
+                  ? "Not configured"
+                  : c.type === "sftp_drop"
+                    ? "Not configured"
+                    : "Not configured";
+              return (
+                <li key={c.id}>
+                  <div>
+                    <p className="dash-row-title">{connectorTypeLabel(c.type)}</p>
+                    <p className="dash-mini-meta">
+                      {c.lastSyncAt
+                        ? `Synced ${formatDate(c.lastSyncAt)}`
+                        : c.status === "connected"
+                          ? "Awaiting sync"
+                          : setupHint}
+                    </p>
+                  </div>
+                  <span className={`badge ${statusBadgeClass(c.status)}`}>
+                    {connectorStatusLabel(c.status)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       </div>
     </AppShell>

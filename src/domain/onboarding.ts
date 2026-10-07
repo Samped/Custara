@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { nanoid } from "nanoid";
 import { defaultIngestEmailForSlug } from "@/domain/mailbox";
+import { currencyFromCountry } from "@/lib/currency";
 
 export const BUSINESS_TYPES = [
   { value: "company", label: "Company" },
@@ -68,6 +69,10 @@ export async function completeCompanyOnboarding(input: {
     if (clash) slug = slugifyCompanyName(`${name}-${nanoid(2)}`);
   }
 
+  const country = (input.country || "").trim().toUpperCase().slice(0, 2) || null;
+  // Location sets the dashboard default currency; no location → USD.
+  const displayCurrency = currencyFromCountry(country);
+
   const updated = await prisma.organization.update({
     where: { id: input.organizationId },
     data: {
@@ -76,7 +81,8 @@ export async function completeCompanyOnboarding(input: {
       legalName: (input.legalName || "").trim() || null,
       businessType: input.businessType,
       industry: (input.industry || "").trim() || null,
-      country: (input.country || "").trim().toUpperCase().slice(0, 2) || null,
+      country,
+      displayCurrency,
       website: website || null,
       onboardingCompletedAt: new Date(),
       ingestEmail: defaultIngestEmailForSlug(slug),
@@ -94,6 +100,7 @@ export async function completeCompanyOnboarding(input: {
       name: updated.name,
       businessType: updated.businessType,
       country: updated.country,
+      displayCurrency: updated.displayCurrency,
     },
   });
 

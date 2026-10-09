@@ -38,7 +38,7 @@ export default async function DevelopersPage({
   const revealedWebhookSecret = cookieStore.get(WEBHOOK_SECRET_COOKIE)?.value || null;
 
   const h = await headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
+  const host = h.get("x-forwarded-host") || h.get("host") || "custara.xyz";
   const proto = h.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
   const baseUrl = `${proto}://${host}`;
 

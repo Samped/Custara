@@ -45,7 +45,7 @@ The seed command creates a demo workspace and prints an API key. Do not seed a d
 ## 5. API sync and async
 
 ```bash
-curl -s localhost:3000/api/v1/invoices -H "Authorization: Bearer $KEY" \
+curl -s https://custara.xyz/api/v1/invoices -H "Authorization: Bearer $KEY" \
   -H "Idempotency-Key: qa-sync-1" -H "Content-Type: application/json" \
   -d @<(jq -n --slurpfile d fixtures/invoices/low-confidence.json '{external_id:"qa_low",sync:true,document:$d[0]}')
 ```
@@ -67,11 +67,11 @@ On the vendor record, create an invite. Open `/vendor/{token}` and upload `happy
 ## 9. FIRS and ERP
 
 ```bash
-curl -s localhost:3000/api/v1/einvoice/firs -H "Authorization: Bearer $KEY" \
+curl -s https://custara.xyz/api/v1/einvoice/firs -H "Authorization: Bearer $KEY" \
   -H "Idempotency-Key: qa-firs-1" -H "Content-Type: application/json" \
   -d @fixtures/api/firs.json
 
-curl -s localhost:3000/api/v1/erp/ingest -H "Authorization: Bearer $KEY" \
+curl -s https://custara.xyz/api/v1/erp/ingest -H "Authorization: Bearer $KEY" \
   -H "Idempotency-Key: qa-erp-1" -H "Content-Type: application/json" \
   -d @fixtures/api/erp-odoo.json
 ```

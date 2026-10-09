@@ -14,7 +14,7 @@ export function defaultConfigPath() {
 }
 
 export function emptyConfig(): CustaraConfig {
-  return { baseUrl: "http://localhost:3000" };
+  return { baseUrl: "https://custara.xyz" };
 }
 
 export async function loadConfig(path = defaultConfigPath()): Promise<CustaraConfig> {
@@ -22,7 +22,7 @@ export async function loadConfig(path = defaultConfigPath()): Promise<CustaraCon
     const raw = await readFile(path, "utf8");
     const parsed = JSON.parse(raw) as Partial<CustaraConfig>;
     return {
-      baseUrl: (parsed.baseUrl || "http://localhost:3000").replace(/\/$/, ""),
+      baseUrl: (parsed.baseUrl || "https://custara.xyz").replace(/\/$/, ""),
       apiKey: parsed.apiKey,
       userToken: parsed.userToken,
       email: parsed.email,
@@ -41,7 +41,7 @@ export function resolveRuntime(
   config: CustaraConfig,
   env: Record<string, string | undefined> = process.env,
 ) {
-  const baseUrl = (env.CUSTARA_URL || config.baseUrl || "http://localhost:3000").replace(/\/$/, "");
+  const baseUrl = (env.CUSTARA_URL || config.baseUrl || "https://custara.xyz").replace(/\/$/, "");
   const apiKey = env.CUSTARA_API_KEY || config.apiKey || "";
   const userToken = env.CUSTARA_TOKEN || config.userToken || "";
   const stepUp = env.CUSTARA_STEP_UP || "";

@@ -20,7 +20,7 @@ Node.js 20 or newer is required.
 ## Configure
 
 ```bash
-custara login --api-key "$CUSTARA_API_KEY" --url http://localhost:3000
+custara login --api-key "$CUSTARA_API_KEY" --url https://custara.xyz
 custara login --email you@company.com
 ```
 
@@ -32,7 +32,7 @@ Both secrets are stored in `~/.custara/config.json` with file mode `0600`. Envir
 
 | Variable | Overrides |
 |----------|-----------|
-| `CUSTARA_URL` | Base URL. Default `http://localhost:3000` |
+| `CUSTARA_URL` | Base URL. Default `https://custara.xyz` |
 | `CUSTARA_API_KEY` | API key |
 | `CUSTARA_TOKEN` | User session token |
 | `CUSTARA_STEP_UP` | `X-Custara-Step-Up` on pay |

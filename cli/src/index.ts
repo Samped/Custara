@@ -7,7 +7,7 @@ import { fail } from "./output.js";
 
 const HELP = `custara — talk to a Custara workspace
 
-  custara login --api-key <key> [--url http://localhost:3000]
+  custara login --api-key <key> [--url https://custara.xyz]
   custara login --email <you@company.com> [--code 123456]
   custara logout
   custara whoami

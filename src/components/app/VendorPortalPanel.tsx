@@ -25,8 +25,8 @@ export async function VendorPortalPanel({
   });
   const invites = await listVendorPortalInvites(organizationId);
   const h = await headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
-  const proto = h.get("x-forwarded-proto") || "http";
+  const host = h.get("x-forwarded-host") || h.get("host") || "custara.xyz";
+  const proto = h.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
   const baseUrl = `${proto}://${host}`;
 
   async function createInvite(formData: FormData) {
@@ -42,8 +42,8 @@ export async function VendorPortalPanel({
         expiresInDays: Number(formData.get("expiresInDays") || 30),
       });
       const hdrs = await headers();
-      const hostName = hdrs.get("x-forwarded-host") || hdrs.get("host") || "localhost:3000";
-      const protocol = hdrs.get("x-forwarded-proto") || "http";
+      const hostName = hdrs.get("x-forwarded-host") || hdrs.get("host") || "custara.xyz";
+      const protocol = hdrs.get("x-forwarded-proto") || (hostName.includes("localhost") ? "http" : "https");
       const link = `${protocol}://${hostName}/vendor/${token}`;
       revalidatePath("/app/vendors");
       redirect(

@@ -54,8 +54,8 @@ export default async function ConnectorsPage({
   const incomingPath = sftpConfig.localIncoming || "";
 
   const h = await headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
-  const proto = h.get("x-forwarded-proto") || "http";
+  const host = h.get("x-forwarded-host") || h.get("host") || "custara.xyz";
+  const proto = h.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
   const baseUrl = `${proto}://${host}`;
 
   const invoiceCurl = `curl -X POST '${baseUrl}/api/v1/invoices' \\

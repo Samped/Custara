@@ -89,7 +89,7 @@ npm run worker
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [https://custara.xyz](https://custara.xyz).
 
 Seed users (email OTP / Circle OTP depending on env):
 
@@ -158,7 +158,7 @@ Bearer API keys (`cst_live_…`). Prefer `Idempotency-Key` on writes. Live payme
 ```bash
 export KEY=cst_live_…
 
-curl -s http://localhost:3000/api/v1/invoices \
+curl -s https://custara.xyz/api/v1/invoices \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: inv-1" \
@@ -174,7 +174,7 @@ curl -s http://localhost:3000/api/v1/invoices \
   }'
 ```
 
-Full surface: [http://localhost:3000/api/openapi](http://localhost:3000/api/openapi)
+Full surface: [https://custara.xyz/api/openapi](https://custara.xyz/api/openapi)
 
 ERP shape notes: [docs/erp-adapters.md](docs/erp-adapters.md)
 

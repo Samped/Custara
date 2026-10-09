@@ -325,7 +325,7 @@ async function main() {
     [
       "Custara enterprise sandbox credentials",
       "",
-      "Login: http://localhost:3000/login (email OTP — no password)",
+      "Login: https://custara.xyz/login (email OTP — no password)",
       "  admin@custara.demo",
       "  approver@custara.demo",
       "  approver2@custara.demo  (dual control second signer)",

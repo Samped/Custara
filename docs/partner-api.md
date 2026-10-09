@@ -1,6 +1,6 @@
 # Partner API
 
-The base URL is the deployment origin. Local development uses `http://localhost:3000`.
+The base URL is `https://custara.xyz`.
 
 Machine clients send `Authorization: Bearer cst_live_…`. MFA, organization settings, and team invites use a user session from `POST /api/v1/cli/login/finish`. See [CLI](cli.md).
 

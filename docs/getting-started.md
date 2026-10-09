@@ -56,7 +56,7 @@ Skip `redis-server` when Compose already provides Redis. Without Redis and the w
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `https://custara.xyz`.
 
 ## Sign in
 

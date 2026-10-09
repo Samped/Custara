@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { createWorker, ensureRepeatableJob } from "@/lib/jobs";
 import { runInvoicePipeline } from "@/domain/pipeline";
 import { runAgentTask } from "@/domain/arc/tasks";
@@ -17,7 +18,29 @@ import { runScheduledAutoPays } from "@/domain/timing";
 import { runCollectionsDunning } from "@/domain/collections";
 import { purgeExpiredDocuments } from "@/domain/retention";
 
+/** Render's free plan is a web service, so the process must listen on PORT. Local `npm run worker` leaves PORT unset. */
+function listenForPlatform() {
+  const raw = process.env.PORT;
+  if (!raw) return;
+  const port = Number(raw);
+  if (!Number.isFinite(port) || port <= 0) return;
+  const server = createServer((req, res) => {
+    const path = (req.url || "/").split("?")[0];
+    if (req.method === "GET" && path === "/health") {
+      res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+      res.end("ok");
+      return;
+    }
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end("not found");
+  });
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`worker health listening on ${port}`);
+  });
+}
+
 async function main() {
+  listenForPlatform();
   console.log(
     "Custara BullMQ worker starting (invoice-pipeline, agent-tasks, webhooks, sync, mailbox, sftp, payment-schedule, collections-dunning, retention-purge)",
   );

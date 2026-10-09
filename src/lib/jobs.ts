@@ -21,20 +21,19 @@ let connection: IORedis | null = null;
 export function getRedisConnection() {
   if (connection) return connection;
   const url = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+  const tls = url.startsWith("rediss://");
   connection = new IORedis(url, {
     maxRetriesPerRequest: null,
     enableReadyCheck: true,
-    connectTimeout: 2_000,
+    connectTimeout: tls ? 10_000 : 2_000,
+    ...(tls ? { tls: {} } : {}),
     retryStrategy(times) {
-      if (times > 3) return null;
-      return Math.min(times * 200, 1_000);
+      if (times > 8) return null;
+      return Math.min(times * 200, 2_000);
     },
   });
   connection.on("error", (err) => {
-    // Avoid unhandled error crash when Redis is down during local/E2E
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[redis]", err.message);
-    }
+    console.warn("[redis]", err.message);
   });
   return connection;
 }

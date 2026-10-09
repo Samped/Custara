@@ -1,47 +1,42 @@
-# Custara SOC 2 readiness roadmap
+# SOC 2 readiness
 
-Security questionnaire pack for enterprise procurement. This is a working control map, not a certification claim.
+Control map for security review. Custara does not hold a SOC 2 Type I or Type II report.
 
-## Scope (in)
+## Scope
 
-- Multi-tenant AP agent: ingest → extract → risk → policy → payment intents → Arc USDC / Nigeria export → reconcile
-- Partner API (scoped keys, idempotency, rate limits)
-- Hash-chained audit log + SIEM export
-- Session auth (email OTP / Circle OTP / OIDC) + TOTP MFA + pay-time step-up
+- Multi-tenant payables: ingest, extract, risk, policy, payment intents, USDC on Arc, Nigeria export, reconcile
+- Partner API with scoped keys, idempotency, and rate limits
+- Hash-chained audit log and export
+- Email one-time code, Circle one-time code, or OpenID Connect, plus authenticator MFA on pay above the organization threshold
 
-## Control map
+## Controls
 
-| Domain | Status | Evidence / notes |
-|--------|--------|------------------|
-| Access control | Partial | Roles, MFA-required roles, invite-only orgs in production (`ALLOW_JIT_ORG_CREATION`), OIDC without JIT user creation |
-| Encryption at rest | Partial | AES-256-GCM for bank fields + webhook secrets; Postgres disk encryption is deploy-owner |
-| Encryption in transit | Partial | TLS terminated at edge; require HTTPS in production |
-| Change management | Partial | GitHub PR CI: lint, typecheck, tenant-isolation tests |
-| Logging / monitoring | Partial | Audit chain, webhook delivery DLQ, Circle unknown_tx alerts |
-| Money movement | Hardened | Allowlist, spend caps, pay-time guards, payment_failed status, CIRCLE_WEBHOOK_SECRET fail-closed |
-| Vendor / destination screening | Plug-in | `SCREENING_PROVIDER=http` + `SCREENING_API_URL` (default allowlist-only) |
-| Data retention | Hardened | `retainedUntil` + BullMQ `retention-purge` worker |
-| Availability | Partial | Redis/BullMQ required; durable repeatable crons; managed Redis recommended for HA |
-| Subprocessors | Document | Circle (wallets/transfers), optional Resend/SMTP, optional S3 |
+| Domain | Status | Evidence |
+|--------|--------|----------|
+| Access control | Partial | Roles, invite-only workspaces in production (`ALLOW_JIT_ORG_CREATION` unset), OIDC with provisioned users |
+| Encryption at rest | Partial | AES-256-GCM for bank fields and webhook secrets. Disk encryption is the operator's responsibility |
+| Encryption in transit | Partial | TLS at the edge. Production endpoints are HTTPS |
+| Change management | Partial | Pull-request checks: lint, typecheck, tenant-isolation tests |
+| Logging | Partial | Audit chain, webhook dead-letter queue, Circle unknown-transaction alerts |
+| Money movement | In place | Allowlist, spend caps, pay-time guards, `payment_failed`, Circle webhooks fail closed without `CIRCLE_WEBHOOK_SECRET` |
+| Destination screening | Optional | `SCREENING_PROVIDER=http` and `SCREENING_API_URL`. Default is allowlist only |
+| Data retention | In place | `retainedUntil` and the `retention-purge` worker |
+| Availability | Partial | Redis and the worker are required. Use managed Redis where high availability is required |
+| Subprocessors | Documented | Circle for wallets and transfers. Optional mail transport and S3 |
 
-## Gaps before Type II readiness
+## Open items
 
-1. Formal SOC 2 Type I/II engagement with an auditor
-2. Penetration test + remediations
-3. SCIM provisioning (admin invite covers SSO mapping today)
-4. Customer-managed keys / BYOK
-5. Formal incident response runbooks and tabletop evidence
-6. Production KYC/KYB + sanctions vendor of record (beyond plug-in)
+1. SOC 2 Type I and Type II examination
+2. Penetration test and remediation record
+3. SCIM provisioning
+4. Customer-managed encryption keys
+5. Incident response runbook and tabletop record
+6. A named sanctions and KYB vendor of record
 
-## Sales boundary
+## Review answers
 
-- **OK now:** design-partner pilots with sandbox Arc, Strict policy, auto-pay off
-- **Not yet:** primary AP system of record for $50M+ enterprises without Wave 1–2 controls reviewed by customer security
-
-## Questionnaire shortcuts
-
-- **Do you support SSO?** Yes — OIDC; users must be admin-provisioned (no silent JIT tenants in production).
-- **Is MFA available?** Yes — TOTP; step-up MFA on pay initiation in live mode.
-- **Are API secrets encrypted?** Webhook signing secrets encrypted at rest (`enc:` AES-GCM).
-- **Audit trail?** Append-only hash chain with export + verify endpoints.
-- **Data deletion?** Privacy mode sets `retainedUntil`; purge worker removes bytes after expiry.
+- **SSO.** OpenID Connect. Users are provisioned by an admin. Production does not create a workspace for an unknown email.
+- **MFA.** Authenticator (TOTP). A person paying at or above the organization USD threshold must be enrolled and must submit a current code. Autopay is exempt.
+- **API secrets.** Webhook signing secrets are encrypted at rest with AES-256-GCM.
+- **Audit trail.** Hash-chained events with export and verify endpoints.
+- **Deletion.** Privacy mode sets `retainedUntil`. The purge worker removes stored bytes after expiry.

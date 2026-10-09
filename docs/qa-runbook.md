@@ -1,10 +1,10 @@
-# Custara QA runbook
+# Release verification
 
-End-to-end checklist from ingest through payment and reconcile. Use after `npm run db:seed` with Redis + `npm run worker` + `npm run dev` running.
+Checklist from ingest through payment and reconcile. Run it against a disposable database after `npm run db:seed`, with Redis, `npm run worker`, and the application running.
 
-Fixtures: `npm run fixtures:generate` → [`fixtures/`](../fixtures/). Local pay-ready (gitignored): `npm run fixtures:pay-ready` → `test-fixtures/pay-ready/` (see [fixtures/README.md](../fixtures/README.md)).
+Generate fixtures with `npm run fixtures:generate`. Pay-ready local files (gitignored) come from `npm run fixtures:pay-ready`.
 
-Demo users (sandbox email OTP when Circle App ID unset):
+The seed command creates a demo workspace and prints an API key. Do not seed a database that holds a production workspace.
 
 | Email | Role |
 |-------|------|
@@ -14,67 +14,57 @@ Demo users (sandbox email OTP when Circle App ID unset):
 | payer@custara.demo | payer |
 | auditor@custara.demo | auditor |
 
-API key: seed output / `storage/DEMO_CREDENTIALS.txt`.
-
----
-
 ## 1. Bootstrap
 
-- [ ] `GET /api/health` → `ok`
-- [ ] Seed org `lagos-distribution` present
-- [ ] Worker logs show BullMQ ready
+- [ ] `GET /api/health` returns `ok: true`
+- [ ] Seed organization is present
+- [ ] Worker logs show the queues ready
 
-## 2. Seed invoice asserts
+## 2. Seed invoices
 
-On `/app/inbox` (or API list):
-
-| external_id | Expected status (approx) |
-|-------------|--------------------------|
+| external_id | Expected status |
+|-------------|-----------------|
 | inv_small_001 | `approved` |
-| inv_dual_002 | `pending_approval` (dual) |
+| inv_dual_002 | `pending_approval` |
 | inv_bankchange_003 | `needs_review` |
 | inv_newvendor_004 | `needs_review` |
 | inv_dup_005 | `duplicate_suspected` |
 | inv_arc_usdc_006 | `needs_review` (`destination_not_allowlisted`) |
 
-## 3. UI PDF upload
+## 3. PDF upload
 
-1. Sign in as admin → `/app/inbox`
-2. Upload `fixtures/invoices/happy-ngn.pdf` → detail shows vendor **Northern Haulage Ltd**, amount 42000
-3. Upload `fixtures/invoices/new-vendor.pdf` → status `needs_review`, risk `new_vendor`
+1. Sign in as admin and open `/app/inbox`.
+2. Upload `fixtures/invoices/happy-ngn.pdf`. Detail shows vendor **Northern Haulage Ltd**, amount 42000.
+3. Upload `fixtures/invoices/new-vendor.pdf`. Status is `needs_review` with risk `new_vendor`.
 
 ## 4. CSV bulk
 
-- [ ] UI: upload `fixtures/csv/bulk-ap.csv`
-- [ ] API: `POST /api/v1/invoices/bulk` with CSV body + Bearer key + `Idempotency-Key`
+- [ ] Upload `fixtures/csv/bulk-ap.csv` from Inbox
+- [ ] `POST /api/v1/invoices/bulk` with a CSV body, bearer key, and `Idempotency-Key`
 
-## 5. API sync vs async
+## 5. API sync and async
 
 ```bash
-# sync
 curl -s localhost:3000/api/v1/invoices -H "Authorization: Bearer $KEY" \
   -H "Idempotency-Key: qa-sync-1" -H "Content-Type: application/json" \
   -d @<(jq -n --slurpfile d fixtures/invoices/low-confidence.json '{external_id:"qa_low",sync:true,document:$d[0]}')
-
-# async (needs worker)
-# same with "sync": false → poll GET /api/v1/invoices/{id} until not extracting/received
 ```
 
-Expect low-confidence → `needs_review`.
+Expect `needs_review` for low confidence. Repeat with `"sync": false` and poll `GET /api/v1/invoices/{id}` until the status leaves `extracting` and `received`. Async ingest requires the worker.
 
-## 6. Mailbox webhook
+## 6. Mailbox
 
-Set `MAILBOX_INBOUND_SECRET` in `.env`. POST multipart/JSON per `/api/ingest/mailbox` (see OpenAPI). Expect invoice `source=mailbox` after worker runs.
+Set `MAILBOX_INBOUND_SECRET`. Post to `/api/ingest/mailbox` as described in OpenAPI. After the worker runs, the invoice source is `mailbox`.
 
-## 7. SFTP drop
+## 7. SFTP
 
-Copy a fixture PDF into `storage/sftp-drops/{orgId}/incoming/`, open `/app/connectors` → Process drop. File moves to `processed/`.
+Copy a fixture PDF into `storage/sftp-drops/{orgId}/incoming/`. On `/app/connectors`, process the drop. The file moves to `processed/`.
 
 ## 8. Vendor portal
 
-`/app/vendor-portal` → create invite → open `/vendor/{token}` → upload `happy-ngn.pdf` with unique invoice number.
+On the vendor record, create an invite. Open `/vendor/{token}` and upload `happy-ngn.pdf` with a unique invoice number.
 
-## 9. FIRS + ERP
+## 9. FIRS and ERP
 
 ```bash
 curl -s localhost:3000/api/v1/einvoice/firs -H "Authorization: Bearer $KEY" \
@@ -88,64 +78,55 @@ curl -s localhost:3000/api/v1/erp/ingest -H "Authorization: Bearer $KEY" \
 
 ## 10. Dual approval
 
-1. Approver1 on `/app/approvals` → approve `inv_dual_002` (or FIX-DUAL)
-2. Same user cannot approve twice (maker-checker)
-3. Approver2 completes second decision → invoice `approved` + pay timing set
+1. First approver approves `inv_dual_002` on `/app/approvals`.
+2. The same user cannot approve twice.
+3. Second approver completes the decision. The invoice is `approved` and a recommended pay date is set.
 
-## 11. Arc pay (Circle Arc testnet — real txs)
+## 11. Arc pay
 
-See also [agent-payments.md](./agent-payments.md) for task types, autopay timing, and on-chain status tracking.
+Requires Circle credentials, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN` for the deployment, and a funded Circle agent wallet. A test network also requires `ARC_ALLOW_LIVE_ON_TESTNET=true`.
 
-Requires `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_LIVE_ON_TESTNET=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN=ARC-TESTNET`, funded **Circle** agent wallet.
+`npm run fixtures:pay-ready` writes `test-fixtures/pay-ready/agent-pay-usdc.pdf`.
 
-Local upload files (gitignored): `npm run fixtures:pay-ready` → `test-fixtures/pay-ready/agent-pay-usdc.pdf` (or `.json`).
+1. Set payment mode to live. Provision the Circle agent, fund it with USDC, and sync.
+2. Upload the pay-ready file and confirm the destination. The address must be on the allowlist.
+3. Clear review until the invoice is `approved`.
+4. Initiate payment. MFA applies at or above the organization threshold.
+5. The worker runs `arc_transfer`. The payment mode is `live` and `txHash` is the Circle transaction hash.
 
-1. Settings → Payment mode **live**; Wallets → **Upgrade to Circle testnet**; fund + Sync
-2. Upload pay-ready Arc file → **Confirm destination & unlock pay** (`0xd9792bf937d9673ab08c452fe55ec4e26632be54`; seed fixtures still use `0x1111…1111`)
-3. Verify new vendor / approve until invoice `approved` if needed
-4. Payer → Initiate payment (MFA if required in live)
-5. Worker `arc_transfer` → real Circle tx → Payments mode must not say `simulated`
+Automated coverage: `E2E=1 npm run test:e2e`. The Arc file skips when Circle credentials are absent.
 
-Automated: `E2E=1 npm run test:e2e` (Arc file skips without Circle keys) and `npx playwright test e2e/pay-arc.spec.ts`.
+## 12. Nigeria export
 
-## 12. Nigeria export pay
+After `npm run fixtures:pay-ready`, use `test-fixtures/pay-ready/export-pay-ngn.pdf` on an approved NGN invoice with no Arc endpoint.
 
-Local upload files (gitignored): `test-fixtures/pay-ready/export-pay-ngn.pdf` (or `.json`) after `npm run fixtures:pay-ready`.
-
-On an approved NGN invoice **without** Arc endpoint:
-
-1. Payer → Initiate payment
-2. Intent rail `nigeria_sandbox` / exported
-3. Download CSV via `/api/internal/exports/{intentId}` (session)
+1. Initiate payment.
+2. The intent rail is `nigeria_sandbox` and the status is exported.
+3. Download the CSV from `/api/internal/exports/{intentId}` with a session.
 
 ## 13. Pay guards
 
-- [ ] Pay while status `needs_review` → error
-- [ ] User with MFA enabled, live pay without MFA code → step-up error
-- [ ] User with MFA off can initiate live pay without MFA code
-- [ ] Live API pay without `X-Custara-Step-Up` when `API_PAY_STEPUP_SECRET` set → 400
+- [ ] Pay while status is `needs_review` returns an error
+- [ ] A user with MFA enabled who pays in live mode without a code receives a step-up error
+- [ ] A user with MFA off can initiate a live payment under the threshold without a code
+- [ ] Live API pay without `X-Custara-Step-Up`, when `API_PAY_STEPUP_SECRET` is set, returns 400
 
 ## 14. Reconcile
 
-- [ ] UI Mark reconciled on `payment_sent`
-- [ ] `POST /api/v1/reconcile` with `invoice_id` + `amount` → `reconciled`
+- [ ] Mark reconciled on a `payment_sent` invoice
+- [ ] `POST /api/v1/reconcile` with `invoice_id` and `amount` sets `reconciled`
 
-## 15. Manual-only (not automated)
+## 15. Manual checks
 
-- WhatsApp webhook, live Xero/QBO OAuth, production Circle OTP email delivery
+WhatsApp webhook delivery, live Xero and QuickBooks OAuth, and production Circle email delivery are verified by hand.
 
----
-
-## Commands cheat sheet
+## Commands
 
 ```bash
 npm run fixtures:generate
-npm run db:up          # or docker compose up -d
+npm run db:up
 npx prisma db push && npm run db:seed
-redis-server           # if not Compose
 npm run worker
 npm run dev
 E2E=1 npm run test:e2e
-npx playwright install chromium   # once
-npm run test:e2e:ui
 ```

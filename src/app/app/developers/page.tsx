@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { readFile } from "fs/promises";
-import path from "path";
 import { revalidatePath } from "next/cache";
 import { requireSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -17,6 +15,7 @@ import {
   setPartnerWebhookActive,
 } from "@/domain/partnerApi";
 import { formatDate } from "@/lib/format";
+import { getArcChain, getArcExecutionMode, getUsdcTokenAddress } from "@/domain/arc/config";
 
 const ONCE_COOKIE = "custara_new_api_key";
 const WEBHOOK_SECRET_COOKIE = "custara_new_webhook_secret";
@@ -62,15 +61,6 @@ export default async function DevelopersPage({
       include: { endpoint: true },
     }),
   ]);
-
-  let demoKeyNote: string | null = null;
-  try {
-    const creds = await readFile(path.join(process.cwd(), "storage", "DEMO_CREDENTIALS.txt"), "utf8");
-    const match = creds.match(/API key: (cst_live_[a-f0-9]+)/);
-    if (match) demoKeyNote = match[1];
-  } catch {
-    // ignore
-  }
 
   async function createKey(formData: FormData) {
     "use server";
@@ -141,6 +131,18 @@ export default async function DevelopersPage({
     revalidatePath("/app/developers");
   }
 
+  const arcMode = getArcExecutionMode(user.paymentMode);
+  const arcChain = getArcChain();
+  const usdcToken = arcChain === "ARC-TESTNET" ? getUsdcTokenAddress() : null;
+  const settlementLabel =
+    arcMode === "testnet"
+      ? `Arc testnet USDC (${arcChain})`
+      : arcMode === "mainnet"
+        ? "Arc mainnet USDC"
+        : arcMode === "simulated"
+          ? "Simulated"
+          : "Blocked until Payment mode is Arc testnet";
+
   const curlIngest = `curl -s ${baseUrl}/api/v1/invoices \\
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -148,13 +150,15 @@ export default async function DevelopersPage({
   -d '{
     "external_id": "erp-1001",
     "sync": true,
-    "currency": "NGN",
+    "currency": "USDC",
     "document": {
       "invoice_number": "INV-1001",
       "vendor_name": "Acme Supplies",
-      "total_amount": 250000,
-      "currency": "NGN",
-      "due_date": "2026-10-20"
+      "total_amount": 25,
+      "currency": "USDC",
+      "due_date": "2026-10-20",
+      "arc_address": "0x0000000000000000000000000000000000000000",
+      "confidence": 0.95
     }
   }'`;
 
@@ -171,7 +175,7 @@ export default async function DevelopersPage({
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: bulk-$(date +%s)" \\
-  -d '{ "sync": true, "csv": "vendor_name,invoice_number,total_amount,currency\\nAcme,INV-9,15000,NGN\\n" }'`;
+  -d '{ "sync": true, "csv": "vendor_name,invoice_number,total_amount,currency\\nAcme,INV-9,25,USDC\\n" }'`;
 
   return (
     <AppShell user={user} title="API">
@@ -234,11 +238,16 @@ export default async function DevelopersPage({
               Generate key
             </button>
           </form>
-          {demoKeyNote ? (
-            <p className="mt-4 text-[0.78rem] text-muted">
-              Seeded demo key available in <code>storage/DEMO_CREDENTIALS.txt</code> (sandbox only).
-            </p>
-          ) : null}
+          <p className="mt-4 text-[0.78rem] text-muted">
+            Settlement for this workspace: <span className="font-medium text-foreground">{settlementLabel}</span>
+            {usdcToken ? (
+              <>
+                {" "}
+                · token <code className="text-[0.72rem]">{usdcToken}</code>
+              </>
+            ) : null}
+            . Webhooks for <code>payment.sent</code> carry the Arc testnet transfer when this mode is on.
+          </p>
         </section>
 
         <section className="card p-5">
@@ -383,7 +392,7 @@ const expected = crypto.createHmac("sha256", process.env.CUSTARA_WEBHOOK_SECRET)
           </div>
           <div className="rounded-xl border border-[var(--line)] p-4">
             <p className="font-semibold">Rails</p>
-            <p className="mt-1 text-muted">`arc_usdc` (primary) · `nigeria_sandbox`</p>
+            <p className="mt-1 text-muted">`arc_usdc` on {arcChain}. Nigeria sandbox is export-only.</p>
           </div>
           <div className="rounded-xl border border-[var(--line)] p-4">
             <p className="font-semibold">Spec</p>

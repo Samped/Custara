@@ -1,10 +1,12 @@
 # Custara
 
-Custara is an accounts-payable workbench for B2B teams. It takes invoices from email, upload, CSV, or API, runs extraction and risk checks, applies a versioned approval policy, and can move money through Arc USDC (Circle) or a Nigeria bank export file.
+Custara is an accounts-payable system for B2B teams. It takes invoices from email, upload, CSV, or API, runs extraction and risk checks, applies a versioned approval policy, and settles approved bills in Arc testnet USDC through Circle. Nigeria bank movement is an export file unless a licensed live flag is on.
 
-This repo is the full app: console, Partner API, background worker, and Postgres schema.
+This repo is the full app: console, Partner API, CLI, background worker, and Postgres schema.
 
-**Status:** usable for design-partner pilots in sandbox. Not a SOC 2–certified primary ledger for large enterprises yet — see [docs/soc2-roadmap.md](docs/soc2-roadmap.md).
+**Documentation:** [docs/README.md](docs/README.md)
+
+**Status:** usable for design-partner pilots on Arc testnet. Not a SOC 2–certified primary ledger — see [docs/soc2-roadmap.md](docs/soc2-roadmap.md).
 
 ---
 
@@ -17,12 +19,12 @@ ingest → extract → risk → policy → (approve) → pay timing → payment 
 | Area | Details |
 |------|---------|
 | Ingest | Upload, CSV, org ingest email, mailbox webhook, SFTP drop, FIRS e-invoice, ERP adapters, vendor portal |
-| Controls | Versioned policies, maker-checker approvals, MFA (pay step-up when MFA is on), destination allowlist, spend caps |
+| Controls | Versioned policies, maker-checker approvals, MFA above a USD threshold, destination allowlist, spend caps |
 | Money | Arc USDC via Circle agent wallet; Nigeria rail is export/sandbox unless partner live is enabled |
 | Audit | Hash-chained events, request IDs, SIEM export |
 | API | Scoped keys, idempotency, rate limits — `GET /api/openapi` |
 
-Auto-pay exists but starts **off**. Live payment mode applies stricter policy defaults and requires webhook secrets / step-up on initiate.
+Auto-pay for approved vendors is **on** by default. Live payment mode applies stricter policy defaults. API pay in live mode requires `X-Custara-Step-Up` only when `API_PAY_STEPUP_SECRET` is set.
 
 ---
 
@@ -201,7 +203,8 @@ src/lib/          # Auth, crypto, jobs, audit, storage
 src/worker.ts     # BullMQ consumers + scheduled jobs
 prisma/           # Schema + seed
 tests/            # Node test runner
-docs/             # ERP adapters, agent payments, SOC 2 roadmap, QA runbook
+cli/              # custara command-line client
+docs/             # Operator and integrator handbook
 ```
 
 ---

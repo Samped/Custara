@@ -6,6 +6,7 @@ import { decryptField } from "@/lib/crypto";
 import { putObject } from "@/lib/storage";
 import { enqueueAgentTask } from "@/domain/arc/tasks";
 import { ensureAgentWallet } from "@/domain/arc/wallets";
+import { convertAmount } from "@/lib/currency";
 
 export type PaymentAdapterResult = {
   status: "exported" | "submitted" | "failed" | "queued";
@@ -119,15 +120,6 @@ export async function createPaymentIntent(input: {
   });
   if (existing) return existing;
 
-  const { assertPayStepUp } = await import("@/domain/payStepUp");
-  await assertPayStepUp({
-    organizationId: input.organizationId,
-    actorType: input.actorType,
-    actorId: input.actorId,
-    mfaCode: input.mfaCode,
-    apiStepUpToken: input.apiStepUpToken,
-  });
-
   const org = await prisma.organization.findUniqueOrThrow({ where: { id: input.organizationId } });
   const invoice = await prisma.invoice.findFirst({
     where: { id: input.invoiceId, organizationId: input.organizationId },
@@ -146,6 +138,16 @@ export async function createPaymentIntent(input: {
   if (!invoice.totalAmount || invoice.totalAmount <= 0) {
     throw new Error("Invoice amount missing");
   }
+
+  const { assertPayStepUp } = await import("@/domain/payStepUp");
+  await assertPayStepUp({
+    organizationId: input.organizationId,
+    actorType: input.actorType,
+    actorId: input.actorId,
+    amountUsd: convertAmount(invoice.totalAmount, invoice.currency, "USD"),
+    mfaCode: input.mfaCode,
+    apiStepUpToken: input.apiStepUpToken,
+  });
 
   const latestApproval = invoice.approvalRequests[0];
   if (latestApproval && latestApproval.status !== "approved") {
@@ -285,11 +287,13 @@ export async function createPaymentIntent(input: {
         payload: { invoiceId: invoice.id },
       });
 
+      const current = await prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
+      const settled = current.status === "completed" || current.status === "failed";
       const updated = await prisma.paymentIntent.update({
         where: { id: intent.id },
         data: {
-          status: "pending_transfer",
-          providerRef: task.id,
+          status: settled ? current.status : "pending_transfer",
+          providerRef: current.circleTxId || current.providerRef || task.id,
         },
       });
 

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { dispatchWebhook } from "@/lib/webhooks";
+import { OPEN_INVOICE_STATUSES } from "@/domain/openInvoices";
 import { convertAmount, resolveDisplayCurrency, sumInCurrency } from "@/lib/currency";
 
 export async function getCashForecast(organizationId: string) {
@@ -10,11 +11,10 @@ export async function getCashForecast(organizationId: string) {
   const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  const openStatuses = ["approved", "pending_approval", "needs_review", "payment_queued", "received", "extracting"];
   const invoices = await prisma.invoice.findMany({
     where: {
       organizationId,
-      status: { in: openStatuses },
+      status: { in: [...OPEN_INVOICE_STATUSES] },
       totalAmount: { not: null },
     },
     select: {

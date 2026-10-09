@@ -344,12 +344,11 @@ export async function fundAgentTestnet(input: {
 
   const waitMs = Math.max(0, Math.min(input.waitMs ?? 0, 180_000));
   const deadline = Date.now() + waitMs;
-  const before =
-    (await getWalletUsdcBalance({
-      walletId: agent.circleWalletId,
-      address: agent.address,
-      provider: agent.provider,
-    }).catch(() => agent.balanceUsdc ?? 0)) ?? 0;
+  const before = await getWalletUsdcBalance({
+    walletId: agent.circleWalletId,
+    address: agent.address,
+    provider: agent.provider,
+  }).catch(() => agent.balanceUsdc ?? 0);
 
   let wallets = await listOrgWallets(input.organizationId);
   let balanceUsdc = wallets.find((w) => w.id === agent.id)?.balanceUsdc ?? before;
@@ -394,7 +393,7 @@ export async function fundAgentTestnet(input: {
 
   const refreshBalance = async () => {
     try {
-      wallets = await syncWalletBalances(input.organizationId);
+      wallets = await syncWalletBalances(input.organizationId, { trustIncrease: true });
     } catch {
       // ignore transient sync errors
     }
@@ -449,17 +448,125 @@ export async function fundAgentTestnet(input: {
   };
 }
 
-export async function syncWalletBalances(organizationId: string) {
+function roundUsdc(amount: number) {
+  return Math.round(amount * 100) / 100;
+}
+
+/** Drop the agent balance as soon as a transfer is accepted. Circle's read often lags. */
+export async function applyAgentSpend(input: {
+  organizationId: string;
+  paymentIntentId: string;
+  amount: number;
+}) {
+  const already = await prisma.auditEvent.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      action: "wallet.balance_spent",
+      entityId: input.paymentIntentId,
+    },
+    select: { id: true },
+  });
+  if (already) return;
+
+  const agent = await prisma.orgWallet.findFirst({
+    where: { organizationId: input.organizationId, role: "agent", status: "active" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!agent || !(input.amount > 0)) return;
+
+  const before = agent.balanceUsdc ?? 0;
+  const ledger = roundUsdc(Math.max(0, before - input.amount));
+  const chain = await getWalletUsdcBalance({
+    walletId: agent.circleWalletId,
+    address: agent.address,
+    provider: agent.provider,
+  }).catch(() => null);
+  const balance = chain != null && chain < before - 0.009 ? chain : ledger;
+
+  await prisma.orgWallet.update({
+    where: { id: agent.id },
+    data: { balanceUsdc: balance, balanceSyncedAt: new Date() },
+  });
+  await writeAudit({
+    organizationId: input.organizationId,
+    actorType: "system",
+    action: "wallet.balance_spent",
+    entityType: "payment_intent",
+    entityId: input.paymentIntentId,
+    metadata: { amount: input.amount, before, balance },
+  });
+}
+
+/** Put a spend back if Circle later reports the transfer failed. */
+export async function restoreAgentSpend(input: {
+  organizationId: string;
+  paymentIntentId: string;
+  amount: number;
+}) {
+  const spent = await prisma.auditEvent.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      action: "wallet.balance_spent",
+      entityId: input.paymentIntentId,
+    },
+    select: { id: true },
+  });
+  if (!spent) return;
+  const restored = await prisma.auditEvent.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      action: "wallet.balance_restored",
+      entityId: input.paymentIntentId,
+    },
+    select: { id: true },
+  });
+  if (restored) return;
+
+  const agent = await prisma.orgWallet.findFirst({
+    where: { organizationId: input.organizationId, role: "agent", status: "active" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!agent) return;
+  const balance = roundUsdc((agent.balanceUsdc ?? 0) + input.amount);
+  await prisma.orgWallet.update({
+    where: { id: agent.id },
+    data: { balanceUsdc: balance, balanceSyncedAt: new Date() },
+  });
+  await writeAudit({
+    organizationId: input.organizationId,
+    actorType: "system",
+    action: "wallet.balance_restored",
+    entityType: "payment_intent",
+    entityId: input.paymentIntentId,
+    metadata: { amount: input.amount, balance },
+  });
+}
+
+export async function syncWalletBalances(organizationId: string, opts?: { trustIncrease?: boolean }) {
   const wallets = await prisma.orgWallet.findMany({
     where: { organizationId, status: "active" },
   });
   const now = new Date();
+  const lastSpend = opts?.trustIncrease
+    ? null
+    : await prisma.auditEvent.findFirst({
+        where: { organizationId, action: "wallet.balance_spent" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      });
+  const holdRecentSpend =
+    lastSpend != null && now.getTime() - lastSpend.createdAt.getTime() < 15 * 60 * 1000;
   for (const w of wallets) {
-    const balance = await getWalletUsdcBalance({
+    const chain = await getWalletUsdcBalance({
       walletId: w.circleWalletId,
       address: w.address,
       provider: w.provider,
-    });
+    }).catch(() => null);
+    if (chain == null) continue;
+    const balance =
+      holdRecentSpend && w.role === "agent" && w.balanceUsdc != null && chain > w.balanceUsdc + 0.009
+        ? w.balanceUsdc
+        : chain;
     await prisma.orgWallet.update({
       where: { id: w.id },
       data: { balanceUsdc: balance, balanceSyncedAt: now },

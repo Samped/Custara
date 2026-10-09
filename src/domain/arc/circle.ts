@@ -231,8 +231,8 @@ export async function getWalletUsdcBalance(input: {
       ?.tokenBalances;
     const usdc = tokenBalances?.find((b) => b.token?.symbol === "USDC");
     return usdc?.amount ? Number(usdc.amount) : 0;
-  } catch {
-    return 0;
+  } catch (e) {
+    throw e instanceof Error ? e : new Error("Wallet balance sync failed");
   }
 }
 

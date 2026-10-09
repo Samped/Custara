@@ -1,4 +1,6 @@
 import { headers } from "next/headers";
+
+export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { orgNeedsOnboarding } from "@/domain/onboarding";

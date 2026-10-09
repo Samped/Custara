@@ -1,15 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getCashForecast } from "@/domain/cash";
+import { OPEN_INVOICE_STATUSES } from "@/domain/openInvoices";
 import { convertAmount, resolveDisplayCurrency } from "@/lib/currency";
-
-const OPEN_INVOICE_STATUSES = [
-  "approved",
-  "pending_approval",
-  "needs_review",
-  "payment_queued",
-  "received",
-  "extracting",
-];
 
 function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -51,7 +43,7 @@ export async function getDashboardSummary(organizationId: string) {
     prisma.invoice.findMany({
       where: {
         organizationId,
-        status: { in: OPEN_INVOICE_STATUSES },
+        status: { in: [...OPEN_INVOICE_STATUSES] },
         totalAmount: { not: null },
       },
       select: { totalAmount: true, currency: true },

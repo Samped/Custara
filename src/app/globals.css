@@ -1188,11 +1188,10 @@ html.dark .login-steps span.on {
   padding-bottom: 6vh;
 }
 
-@media (min-width: 980px) {
+@media (min-width: 900px) {
   .hero-stage {
-    grid-template-columns: minmax(0, 0.9fr) minmax(340px, 1.1fr);
-    gap: 3.25rem;
-    align-items: center;
+    grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
+    gap: 3rem;
   }
 }
 
@@ -1288,15 +1287,69 @@ html.dark .login-steps span.on {
 
 .hero-visual {
   position: relative;
-  width: min(100%, 720px);
+  width: min(420px, 86vw);
   margin-inline: auto;
 }
 
-@media (min-width: 980px) {
+@media (min-width: 900px) {
   .hero-visual {
-    width: 100%;
-    margin-inline: 0;
+    margin-inline: 0 0 0 auto;
   }
+}
+
+.product-band {
+  display: grid;
+  gap: 1.75rem;
+  align-items: center;
+  padding: 0.5rem 0 3.25rem;
+}
+
+@media (min-width: 900px) {
+  .product-band {
+    grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+    gap: 2.5rem;
+  }
+}
+
+.product-kicker {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.product-side h2 {
+  margin: 0.55rem 0 0;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: clamp(1.45rem, 2.2vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.product-note {
+  margin: 0.65rem 0 0;
+  max-width: 26rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.product-guide {
+  display: inline-block;
+  margin-top: 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+
+.product-guide:hover {
+  color: var(--accent);
 }
 
 .hero-film {
@@ -1329,16 +1382,15 @@ html.dark .login-steps span.on {
   object-fit: cover;
 }
 
-.hero-cli {
-  max-width: 34rem;
-  margin-top: 1.35rem;
+.product-cli {
+  margin-top: 1.1rem;
   padding: 0.75rem 0.8rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
 }
 
-.hero-cli-head {
+.product-cli-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1351,25 +1403,7 @@ html.dark .login-steps span.on {
   color: var(--accent);
 }
 
-.hero-cli-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.hero-cli-head a {
-  letter-spacing: -0.01em;
-  text-transform: none;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.hero-cli-head a:hover {
-  color: var(--foreground);
-}
-
-.hero-cli-cmd {
+.product-cli-cmd {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.78rem;
@@ -1379,7 +1413,7 @@ html.dark .login-steps span.on {
   white-space: pre-wrap;
 }
 
-.hero-cli-copy {
+.product-cli-copy {
   height: 2rem;
   flex-shrink: 0;
   padding: 0 0.7rem;

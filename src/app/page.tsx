@@ -5,6 +5,7 @@ import { ThemeToggle } from "@/components/app/ThemeProvider";
 import { BrandDot, PageAtmosphere } from "@/components/app/GridAtmosphere";
 import { CopyButton } from "@/components/app/CopyButton";
 import { HeroFilm } from "@/components/app/HeroFilm";
+import { HeroGlobe } from "@/components/app/HeroGlobe";
 import { HeroType } from "@/components/app/HeroType";
 import { PlatformInsights } from "@/components/app/PlatformInsights";
 import { getPlatformMetrics } from "@/domain/platformMetrics";
@@ -85,21 +86,30 @@ export default async function HomePage() {
                 API
               </Link>
             </div>
-            <div className="hero-cli">
-              <div className="hero-cli-head">
+          </div>
+          <div className="hero-visual">
+            <HeroGlobe />
+          </div>
+        </section>
+
+        <section className="product-band shell" aria-label="Product">
+          <HeroFilm />
+          <div className="product-side">
+            <p className="product-kicker">Command line</p>
+            <h2>Install the CLI</h2>
+            <p className="product-note">From a checkout of the repository. Node.js 20 or newer.</p>
+            <div className="product-cli">
+              <div className="product-cli-head">
                 <span>CLI</span>
-                <span className="hero-cli-actions">
-                  <Link href="/docs/cli">Install guide</Link>
-                  <CopyButton value={cliInstall} label="Copy" className="btn btn-secondary hero-cli-copy" />
-                </span>
+                <CopyButton value={cliInstall} label="Copy" className="btn btn-secondary product-cli-copy" />
               </div>
-              <pre className="hero-cli-cmd">
+              <pre className="product-cli-cmd">
                 <code>{cliInstall}</code>
               </pre>
             </div>
-          </div>
-          <div className="hero-visual">
-            <HeroFilm />
+            <Link href="/docs/cli" className="product-guide">
+              Install guide
+            </Link>
           </div>
         </section>
 

@@ -10,8 +10,10 @@ import { MfaSetupRequired } from "@/components/app/MfaSetupRequired";
 
 export default async function InvoiceWorkbenchPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ reread?: string }>;
 }) {
   let user;
   try {
@@ -21,6 +23,7 @@ export default async function InvoiceWorkbenchPage({
   }
 
   const { id } = await params;
+  const { reread } = await searchParams;
   const invoice = await prisma.invoice.findFirst({
     where: { id, organizationId: user.organizationId },
     include: {
@@ -34,6 +37,22 @@ export default async function InvoiceWorkbenchPage({
   });
 
   if (!invoice) notFound();
+
+  const emptyRead =
+    invoice.extraction?.vendorName === "Unknown Vendor" &&
+    invoice.extraction.confidence <= 0.2 &&
+    Number(invoice.extraction.totalAmount) === 0;
+  const closed = ["paid", "settled", "void", "payment_queued"].includes(invoice.status);
+  const hasFile = invoice.documents.some((doc) => !doc.deletedAt);
+  if (emptyRead && hasFile && !closed && reread !== "1") {
+    try {
+      const { runInvoicePipeline } = await import("@/domain/pipeline");
+      await runInvoicePipeline(invoice.id, { type: "system", id: user.id });
+    } catch (err) {
+      console.warn("[custara] reread invoice", err instanceof Error ? err.message : err);
+    }
+    redirect(`/app/invoices/${invoice.id}?reread=1`);
+  }
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: user.organizationId },

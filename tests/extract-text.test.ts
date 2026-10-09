@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import path from "path";
-import { extractFromText, parseFlexibleDate, parseModelExtraction } from "../src/domain/extract";
+import { extractFromText, parseFlexibleDate, parseModelExtraction, textFromPdfLiterals } from "../src/domain/extract";
 
 const SAMPLE_TEXT = `
 AC
@@ -88,6 +88,22 @@ Bank: Access Bank
     assert.equal(e!.invoiceNumber, "2024-0847");
     assert.equal(e!.totalAmount, 31703.7);
     assert.equal(e!.currency, "USD");
+  });
+});
+
+describe("textFromPdfLiterals", () => {
+  it("reads labeled lines stored as PDF text operators", () => {
+    const pdf = Buffer.from(
+      "%PDF-1.4\n(Vendor: Arc Softgoods Inc) Tj\n(Invoice Number: MICRO-1) Tj\n(Currency: USDC) Tj\n(Total: 1.00) Tj\n(PO Number: PO-MICRO-1) Tj\n(Arc Address: 0xd9792bf937d9673ab08c452fe55ec4e26632be54) Tj\n",
+    );
+    const extracted = extractFromText(textFromPdfLiterals(pdf));
+    assert.ok(extracted);
+    assert.equal(extracted!.vendorName, "Arc Softgoods Inc");
+    assert.equal(extracted!.invoiceNumber, "MICRO-1");
+    assert.equal(extracted!.totalAmount, 1);
+    assert.equal(extracted!.currency, "USDC");
+    assert.equal(extracted!.poNumber, "PO-MICRO-1");
+    assert.equal(extracted!.arcAddress, "0xd9792bf937d9673ab08c452fe55ec4e26632be54");
   });
 });
 

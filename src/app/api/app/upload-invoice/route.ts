@@ -3,6 +3,7 @@ import { AuthError, requireSessionUser } from "@/lib/auth";
 import { processInvoiceUpload } from "@/domain/uploadInvoice";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /**
  * Invoice upload — prefers JSON { fileName, contentBase64 } (wallet-extension safe).

@@ -100,7 +100,9 @@ function guessVendorName(text: string): string | null {
     text.match(/From:\s*(.+)/i)?.[1]?.trim() ||
     text.match(/Supplier:\s*(.+)/i)?.[1]?.trim() ||
     text.match(/Account Name:\s*(.+)/i)?.[1]?.trim();
-  if (labeled && !/^unknown/i.test(labeled)) return labeled.split("\n")[0].trim();
+  if (labeled && !/^unknown/i.test(labeled)) {
+    return labeled.split("\n")[0].replace(/\)\s*Tj\b.*$/i, "").trim();
+  }
 
   const lines = text
     .split(/\r?\n/)
@@ -401,7 +403,58 @@ async function maybeLlmVisionExtract(buf: Buffer, mimeType: string, filename: st
   }
 }
 
+/**
+ * Read text operators out of a PDF when the parser is missing or returns nothing.
+ * Generated invoices store lines as `(Vendor: …) Tj`.
+ */
+export function textFromPdfLiterals(buf: Buffer): string {
+  const raw = buf.toString("latin1");
+  const lines: string[] = [];
+  let i = 0;
+  while (i < raw.length) {
+    if (raw[i] !== "(") {
+      i += 1;
+      continue;
+    }
+    i += 1;
+    let out = "";
+    let depth = 1;
+    while (i < raw.length && depth > 0) {
+      const ch = raw[i];
+      if (ch === "\\") {
+        const next = raw[i + 1];
+        if (next === "n") out += "\n";
+        else if (next === "r") out += "\r";
+        else if (next === "t") out += "\t";
+        else if (next != null) out += next;
+        i += 2;
+        continue;
+      }
+      if (ch === "(") {
+        depth += 1;
+        out += ch;
+        i += 1;
+        continue;
+      }
+      if (ch === ")") {
+        depth -= 1;
+        if (depth === 0) break;
+        out += ch;
+        i += 1;
+        continue;
+      }
+      out += ch;
+      i += 1;
+    }
+    i += 1;
+    const text = out.replace(/[ \t]+/g, " ").trim();
+    if (text.length >= 2 && /[A-Za-z0-9]/.test(text)) lines.push(text);
+  }
+  return lines.join("\n");
+}
+
 async function extractPdfText(buf: Buffer): Promise<string> {
+  let parsed = "";
   try {
     // Force Node build — Turbopack can resolve the browser export otherwise.
     const mod = await import(/* webpackIgnore: true */ "pdf-parse");
@@ -409,13 +462,14 @@ async function extractPdfText(buf: Buffer): Promise<string> {
     if (!PDFParse) throw new Error("pdf-parse PDFParse export missing");
     const parser = new PDFParse({ data: Buffer.from(buf) });
     const result = await parser.getText();
-    const text = (result?.text || "").trim();
+    parsed = (result?.text || "").trim();
     await parser.destroy?.();
-    return text;
   } catch (err) {
     console.warn("[custara] extractPdfText failed", err instanceof Error ? err.message : err);
-    return "";
   }
+  if (parsed.replace(/\s/g, "").length >= 40) return parsed;
+  const literals = textFromPdfLiterals(buf);
+  return literals.length > parsed.length ? literals : parsed || literals;
 }
 
 function isBinaryDoc(mimeType: string, filename: string) {
@@ -460,6 +514,14 @@ export async function extractInvoice(invoiceId: string): Promise<Extraction> {
       text = buf.toString("utf8");
     }
 
+    const fromText = text ? extractFromText(text) : null;
+    // Labeled invoices already have vendor, number, and total in the file.
+    // Use that read before a model call so a slow or missing key cannot wipe it.
+    if (fromText && fromText.confidence >= 0.8 && fromText.totalAmount > 0) {
+      extraction = fromText;
+      break;
+    }
+
     if (process.env.OPENAI_API_KEY && binary) {
       const mime = doc.mimeType.startsWith("image/")
         ? doc.mimeType
@@ -481,12 +543,9 @@ export async function extractInvoice(invoiceId: string): Promise<Extraction> {
       }
     }
 
-    if (text) {
-      const fromText = extractFromText(text);
-      if (fromText) {
-        extraction = fromText;
-        break;
-      }
+    if (fromText) {
+      extraction = fromText;
+      break;
     }
   }
 

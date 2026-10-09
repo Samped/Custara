@@ -1,0 +1,92 @@
+# Free Render blueprint: worker web service, Postgres, and Key Value.
+# Background workers are not on the free plan, so the worker is a web service
+# that listens on PORT (see src/worker.ts). Postgres on the free plan expires
+# 30 days after creation. Key Value on the free plan does not persist.
+services:
+  - type: web
+    name: custara-worker
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --include=dev && npx prisma generate
+    preDeployCommand: npx prisma db push
+    startCommand: npm run worker
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: APP_URL
+        value: https://custara.xyz
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://custara.xyz
+      - key: DATABASE_URL
+        fromDatabase:
+          name: custara-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: custara-redis
+          property: connectionString
+      - key: ARC_PAYMENTS_LIVE
+        value: "true"
+      - key: ARC_ALLOW_SIMULATED
+        value: "false"
+      - key: NIGERIA_PAYMENT_LIVE
+        value: "false"
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: SESSION_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: ARC_CHAIN
+        sync: false
+      - key: ARC_ALLOW_LIVE_ON_TESTNET
+        sync: false
+      - key: ARC_USDC_TOKEN_ADDRESS
+        sync: false
+      - key: CIRCLE_API_KEY
+        sync: false
+      - key: CIRCLE_ENTITY_SECRET
+        sync: false
+      - key: CIRCLE_ENTITY_SECRET_CIPHERTEXT
+        sync: false
+      - key: CIRCLE_WEBHOOK_SECRET
+        sync: false
+      - key: CIRCLE_APP_ID
+        sync: false
+      - key: NEXT_PUBLIC_CIRCLE_APP_ID
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+
+  - type: keyvalue
+    name: custara-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: Vercel and the worker
+
+databases:
+  - name: custara-postgres
+    plan: free
+    region: oregon
+    postgresMajorVersion: "16"
+    databaseName: custara
+    user: custara
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: Vercel and the worker

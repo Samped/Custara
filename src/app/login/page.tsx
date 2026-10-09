@@ -43,12 +43,9 @@ export default async function LoginPage({
     if (!found) redirect("/login?error=MFA%20session%20expired");
 
     const need = await userNeedsMfaChallenge(found);
-    if (need === "enroll" && !found.mfaEnabled) {
-      if (found.role === "admin") {
-        await createSession(found.id);
-        redirect("/app/settings?mfa=enroll");
-      }
-      redirect("/login?error=MFA%20must%20be%20enrolled%20by%20an%20admin%20first");
+    if (need !== "challenge") {
+      await createSession(found.id);
+      redirect("/app");
     }
 
     try {

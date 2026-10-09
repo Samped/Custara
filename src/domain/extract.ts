@@ -274,31 +274,43 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-function parseModelExtraction(raw: string): Extraction | null {
+function firstString(data: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+export function parseModelExtraction(raw: string): Extraction | null {
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return null;
   }
+  if (data.invoice && typeof data.invoice === "object") data = data.invoice as Record<string, unknown>;
   const items = Array.isArray(data.lineItems) ? data.lineItems : Array.isArray(data.line_items) ? data.line_items : [];
   const confidence = asNumber(data.confidence);
+  const vendorName = firstString(data, ["vendorName", "vendor_name", "vendor", "supplier", "supplier_name", "supplierName"]);
+  const invoiceNumber = firstString(data, ["invoiceNumber", "invoice_number", "invoice_no", "number", "invoice"]);
   try {
     return extractionSchema.parse({
-      vendorName: String(data.vendorName || data.vendor_name || "").trim() || "Unknown Vendor",
-      invoiceNumber: String(data.invoiceNumber || data.invoice_number || "").trim() || "UNKNOWN",
-      issueDate: (data.issueDate || data.issue_date || null) as string | null,
-      dueDate: (data.dueDate || data.due_date || null) as string | null,
-      currency: String(data.currency || "USD").trim() || "USD",
+      vendorName: vendorName || "Unknown Vendor",
+      invoiceNumber: invoiceNumber || "UNKNOWN",
+      issueDate: firstString(data, ["issueDate", "issue_date", "invoice_date", "date"]) || null,
+      dueDate: firstString(data, ["dueDate", "due_date", "due"]) || null,
+      currency: firstString(data, ["currency"]) || "USD",
       subtotal: asNumber(data.subtotal ?? data.sub_total),
-      taxAmount: asNumber(data.taxAmount ?? data.tax_amount),
-      totalAmount: asNumber(data.totalAmount ?? data.total_amount ?? data.amount) ?? 0,
-      poNumber: (data.poNumber || data.po_number || null) as string | null,
-      accountName: (data.accountName || data.account_name || null) as string | null,
-      accountNumber: data.accountNumber || data.account_number ? String(data.accountNumber || data.account_number) : null,
-      bankName: (data.bankName || data.bank_name || null) as string | null,
-      bankCode: data.bankCode || data.bank_code ? String(data.bankCode || data.bank_code) : null,
-      arcAddress: (data.arcAddress || data.arc_address || null) as string | null,
+      taxAmount: asNumber(data.taxAmount ?? data.tax_amount ?? data.tax),
+      totalAmount: asNumber(data.totalAmount ?? data.total_amount ?? data.total ?? data.grand_total ?? data.amount) ?? 0,
+      poNumber: firstString(data, ["poNumber", "po_number", "purchase_order"]) || null,
+      accountName: firstString(data, ["accountName", "account_name"]) || null,
+      accountNumber: firstString(data, ["accountNumber", "account_number"]) || null,
+      bankName: firstString(data, ["bankName", "bank_name", "bank"]) || null,
+      bankCode: firstString(data, ["bankCode", "bank_code"]) || null,
+      arcAddress: firstString(data, ["arcAddress", "arc_address"]) || null,
       lineItems: items.map((item) => {
         const row = item as Record<string, unknown>;
         return {

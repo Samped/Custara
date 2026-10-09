@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import path from "path";
-import { extractFromText, parseFlexibleDate } from "../src/domain/extract";
+import { extractFromText, parseFlexibleDate, parseModelExtraction } from "../src/domain/extract";
 
 const SAMPLE_TEXT = `
 AC
@@ -88,5 +88,30 @@ Bank: Access Bank
     assert.equal(e!.invoiceNumber, "2024-0847");
     assert.equal(e!.totalAmount, 31703.7);
     assert.equal(e!.currency, "USD");
+  });
+});
+
+describe("parseModelExtraction", () => {
+  it("reads the short field names the model returns", () => {
+    const parsed = parseModelExtraction(
+      JSON.stringify({
+        vendor: "Northern Haulage Ltd",
+        invoice_number: "FIX-HAPPY-001",
+        issue_date: "2026-09-01",
+        due_date: "2026-09-30",
+        currency: "NGN",
+        total: 42000,
+        account_name: "Northern Haulage Ltd",
+        account_number: "0123456789",
+        bank: "Access Bank",
+        po_number: "PO-100",
+      }),
+    );
+    assert.ok(parsed);
+    assert.equal(parsed!.vendorName, "Northern Haulage Ltd");
+    assert.equal(parsed!.invoiceNumber, "FIX-HAPPY-001");
+    assert.equal(parsed!.totalAmount, 42000);
+    assert.equal(parsed!.currency, "NGN");
+    assert.equal(parsed!.bankName, "Access Bank");
   });
 });

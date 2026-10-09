@@ -1,0 +1,18 @@
+{
+  "name": "custara",
+  "version": "0.1.0",
+  "description": "Command-line client for a Custara workspace",
+  "type": "module",
+  "bin": {
+    "custara": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

@@ -24,11 +24,12 @@ export async function recommendPayTiming(input: {
 }): Promise<PayTimingRecommendation> {
   const invoice = await prisma.invoice.findFirstOrThrow({
     where: { id: input.invoiceId, organizationId: input.organizationId },
-    include: { vendor: true },
+    include: { vendor: true, organization: { select: { targetDpoDays: true } } },
   });
 
   const today = startOfDay(new Date());
   const due = invoice.dueDate ? startOfDay(invoice.dueDate) : null;
+  const issued = startOfDay(invoice.issueDate || invoice.createdAt);
   const discountPct = invoice.vendor?.earlyPayDiscountPct ?? null;
   const earlyDays = invoice.vendor?.earlyPayDays ?? null;
 
@@ -54,6 +55,13 @@ export async function recommendPayTiming(input: {
     reason = `Early-pay discount available (${discountPct}%) but 7-day funding gap — defer to due date to preserve cash.`;
     recommendedPayDate = due && due > today ? due : today;
     takeDiscount = false;
+  } else if (invoice.organization.targetDpoDays != null && invoice.organization.targetDpoDays >= 0) {
+    const target = startOfDay(
+      new Date(issued.getTime() + invoice.organization.targetDpoDays * 864e5),
+    );
+    recommendedPayDate = due && target > due ? due : target;
+    if (recommendedPayDate < today) recommendedPayDate = today;
+    reason = `Scheduled ${recommendedPayDate.toISOString().slice(0, 10)} to hold about ${invoice.organization.targetDpoDays} days payable, not past the due date.`;
   } else if (cashTight && due && due > today) {
     reason = `Funding gap in 7 days — schedule pay on due date ${due.toISOString().slice(0, 10)}.`;
   }
@@ -94,7 +102,7 @@ export async function listSuggestedPays(organizationId: string) {
   });
 }
 
-/** Auto-pay approved invoices whose recommended pay date is due (org must enable autoPayEnabled). */
+/** Auto-pay invoices from approved vendors (not new) when the recommended pay date is due. */
 export async function runScheduledAutoPays() {
   const orgs = await prisma.organization.findMany({
     where: { autoPayEnabled: true },
@@ -113,6 +121,7 @@ export async function runScheduledAutoPays() {
         status: "approved",
         recommendedPayDate: { lte: todayEnd },
         risks: { none: { severity: "hard" } },
+        vendor: { isNew: false },
       },
       take: 25,
     });

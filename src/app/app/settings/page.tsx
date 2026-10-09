@@ -77,6 +77,24 @@ export default async function SettingsPage({
             <input name="name" className="input mt-1" defaultValue={org.name} />
           </label>
           <label className="text-sm">
+            Website
+            <input
+              name="website"
+              className="input mt-1"
+              placeholder="https://acme.example"
+              defaultValue={org.website || ""}
+            />
+          </label>
+          <label className="text-sm">
+            Social profile
+            <input
+              name="socialUrl"
+              className="input mt-1"
+              placeholder="https://linkedin.com/company/…"
+              defaultValue={org.socialUrl || ""}
+            />
+          </label>
+          <label className="text-sm">
             Business location
             <select name="country" className="input mt-1" defaultValue={org.country || ""}>
               <option value="">Not set — USD default</option>
@@ -113,19 +131,39 @@ export default async function SettingsPage({
             Payment mode
             <select name="paymentMode" className="input mt-1" defaultValue={org.paymentMode}>
               <option value="sandbox">Simulated</option>
-              <option value="live">Live</option>
+              <option value="live">Arc testnet</option>
             </select>
             <span className="mt-1 block text-[0.75rem] text-muted">
-              Live requires Circle and Arc environment configuration.
+              Arc testnet settles USDC through Circle on ARC-TESTNET. API payments and webhooks follow this mode.
             </span>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input name="privacyMode" type="checkbox" defaultChecked={org.privacyMode} />
             Privacy mode
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input name="autoPayEnabled" type="checkbox" defaultChecked={org.autoPayEnabled} />
-            Auto-pay on recommended date
+          <label className="text-sm">
+            Target days payable
+            <input
+              name="targetDpoDays"
+              type="number"
+              min={0}
+              max={365}
+              className="input mt-1"
+              placeholder="Due date"
+              defaultValue={org.targetDpoDays ?? ""}
+            />
+            <span className="mt-1 block text-[0.75rem] text-muted">
+              Leave blank to pay on the due date, or earlier when a discount is covered.
+            </span>
+          </label>
+          <label className="text-sm md:col-span-2">
+            <span className="flex items-center gap-2">
+              <input name="autoPayEnabled" type="checkbox" defaultChecked={org.autoPayEnabled} />
+              Auto-pay approved vendors on the recommended date
+            </span>
+            <span className="mt-1 block text-[0.75rem] text-muted">
+              On by default. New vendors still wait for a person. Uncheck to pause.
+            </span>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input name="ssoEnforced" type="checkbox" defaultChecked={org.ssoEnforced} />

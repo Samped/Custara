@@ -46,6 +46,7 @@ export async function loadPolicyRules(organizationId: string): Promise<PolicyRul
     holdOnBankChange: true,
     holdOnDuplicate: true,
     requirePoMatch: false,
+    requirePurchaseOrder: false,
     holdOnUnknownDestination: true,
     blockAutoApproveUntilAllowlisted: true,
     minConfidenceForAutoApprove: 0.6,
@@ -136,6 +137,8 @@ export function evaluatePolicy(input: {
   const hasUnknownDest = hard.some((r) => r.code === "destination_not_allowlisted");
   const hasPoVendorMismatch = hard.some((r) => r.code === "po_vendor_mismatch" || r.code === "po_amount_mismatch");
   const hasPoUnknown = input.risks.some((r) => r.code === "po_unknown");
+  const hasContractRequired = hard.some((r) => r.code === "contract_required");
+  const hasAddressScreenFail = hard.some((r) => r.code === "address_screen_failed");
   const hasLowConfidence = hard.some((r) => r.code === "low_confidence");
 
   if (hasDuplicate && input.rules.holdOnDuplicate) {
@@ -144,6 +147,14 @@ export function evaluatePolicy(input: {
       requiredApprovals: 0,
       reason: "Duplicate suspected — invoice placed on duplicate hold.",
       nextStatus: "duplicate_suspected",
+    };
+  }
+  if (hasAddressScreenFail) {
+    return {
+      decision: "hold",
+      requiredApprovals: 1,
+      reason: "Address screening denied this destination.",
+      nextStatus: "needs_review",
     };
   }
   if (input.rules.holdOnUnknownDestination && hasUnknownDest) {
@@ -163,6 +174,14 @@ export function evaluatePolicy(input: {
       decision: "hold",
       requiredApprovals: 1,
       reason: "Arc destination present but not allowlisted — no auto-approve until allowlisted.",
+      nextStatus: "needs_review",
+    };
+  }
+  if (input.rules.requirePurchaseOrder && hasContractRequired) {
+    return {
+      decision: "hold",
+      requiredApprovals: 1,
+      reason: "Invoice has no purchase order, and this policy requires one.",
       nextStatus: "needs_review",
     };
   }

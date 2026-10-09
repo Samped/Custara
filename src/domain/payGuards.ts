@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { loadPolicyRules } from "@/domain/policy";
-import { assertDestinationAllowed, assertSpendLimits } from "@/domain/arc/allowlist";
-import { screenDestination } from "@/domain/screening";
+import { assertSpendLimits } from "@/domain/arc/allowlist";
+import { screenDestination, screenPayAddress } from "@/domain/screening";
 
 /**
  * Pay-time re-checks before creating/executing a payment intent.
@@ -50,7 +50,13 @@ export async function assertPayTimeGuards(input: {
   if (input.rail === "arc_usdc") {
     const addr = input.arcAddress;
     if (!addr) throw new Error("Pay blocked: Arc destination missing");
-    await assertDestinationAllowed(input.organizationId, addr);
+    const screened = await screenPayAddress({
+      organizationId: input.organizationId,
+      address: addr,
+    });
+    if (screened.blocked) {
+      throw new Error(screened.risks.map((r) => r.message).join(" "));
+    }
     await screenDestination({
       organizationId: input.organizationId,
       address: addr,

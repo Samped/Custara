@@ -47,6 +47,37 @@ describe("evaluatePolicy money controls", () => {
     assert.equal(result.decision, "auto_approve");
   });
 
+  it("holds an invoice with no purchase order when the policy requires one", () => {
+    const risks: RiskItem[] = [
+      { code: "contract_required", severity: "hard", message: "no po" },
+    ];
+    const result = evaluatePolicy({
+      amount: 100,
+      currency: "NGN",
+      risks,
+      isNewVendor: false,
+      bankChanged: false,
+      rules: { ...PAYABLESAI_STRICT_RULES, requirePurchaseOrder: true },
+    });
+    assert.equal(result.decision, "hold");
+    assert.match(result.reason, /purchase order/);
+  });
+
+  it("holds when address screening denies the destination", () => {
+    const risks: RiskItem[] = [
+      { code: "address_screen_failed", severity: "hard", message: "denied" },
+    ];
+    const result = evaluatePolicy({
+      amount: 100,
+      currency: "USDC",
+      risks,
+      isNewVendor: false,
+      bankChanged: false,
+      rules: PAYABLESAI_STRICT_RULES,
+    });
+    assert.equal(result.decision, "hold");
+  });
+
   it("holds unknown Arc destination", () => {
     const risks: RiskItem[] = [
       { code: "destination_not_allowlisted", severity: "hard", message: "no" },

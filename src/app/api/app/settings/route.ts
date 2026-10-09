@@ -124,6 +124,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === "save_mfa_threshold") {
+      const amount = Number(body.mfaPayThresholdUsd);
+      if (!Number.isFinite(amount) || amount < 0) {
+        return NextResponse.json(
+          { error: "Enter a USD amount of 0 or more." },
+          { status: 400 },
+        );
+      }
+      await prisma.organization.update({
+        where: { id: user.organizationId },
+        data: { mfaPayThresholdUsd: amount },
+      });
+      await writeAudit({
+        organizationId: user.organizationId,
+        actorType: "user",
+        actorId: user.id,
+        action: "org.mfa_pay_threshold_updated",
+        entityType: "organization",
+        entityId: user.organizationId,
+        metadata: { mfaPayThresholdUsd: amount },
+      });
+      return NextResponse.json({ ok: true, redirectTo: "/app/security" });
+    }
+
     if (action === "save_mfa_roles") {
       const roles = Array.isArray(body.mfaRoles)
         ? body.mfaRoles.map(String)
@@ -146,6 +170,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, redirectTo: "/app/roles" });
     }
 
+    if (action === "save_mailbox") {
+      const { saveMailboxSettings } = await import("@/domain/mailbox");
+      await saveMailboxSettings({
+        organizationId: user.organizationId,
+        actorId: user.id,
+        host: String(body.host || ""),
+        port: Number(body.port || 993),
+        secure: body.secure !== false && body.secure !== "false",
+        user: String(body.user || ""),
+        password: body.password ? String(body.password) : undefined,
+        folder: body.folder ? String(body.folder) : undefined,
+        ingestEmail: body.ingestEmail ? String(body.ingestEmail) : undefined,
+      });
+      return NextResponse.json({ ok: true, redirectTo: "/app/connectors?mailbox=saved" });
+    }
+
     if (action === "save_org") {
       const paymentMode = String(body.paymentMode || "sandbox");
       const nextMode = paymentMode === "live" ? "live" : "sandbox";
@@ -159,6 +199,21 @@ export async function POST(request: NextRequest) {
         .toUpperCase();
       const displayCurrency = currencyRaw || (country ? currencyFromCountry(country) : "USD");
       const autoPayEnabled = Boolean(body.autoPayEnabled);
+      const targetRaw = body.targetDpoDays;
+      let targetDpoDays: number | null = null;
+      if (targetRaw !== undefined && targetRaw !== null && String(targetRaw).trim() !== "") {
+        const n = Number(targetRaw);
+        if (!Number.isFinite(n) || n < 0 || n > 365) {
+          return NextResponse.json(
+            { error: "Target days payable must be between 0 and 365." },
+            { status: 400 },
+          );
+        }
+        targetDpoDays = Math.round(n);
+      }
+      const { normalizeHttpUrl } = await import("@/lib/businessPresence");
+      const website = normalizeHttpUrl(String(body.website || ""));
+      const socialUrl = normalizeHttpUrl(String(body.socialUrl || ""));
 
       await prisma.organization.update({
         where: { id: user.organizationId },
@@ -166,6 +221,8 @@ export async function POST(request: NextRequest) {
           name: String(body.name || "Organization"),
           country,
           displayCurrency,
+          website,
+          socialUrl,
           privacyMode: Boolean(body.privacyMode),
           privacyDeleteDays: Number(body.privacyDeleteDays || 30),
           expectedInflow7d: Number(body.expectedInflow7d || 0),
@@ -173,6 +230,7 @@ export async function POST(request: NextRequest) {
           paymentMode: nextMode,
           ssoEnforced: Boolean(body.ssoEnforced),
           autoPayEnabled,
+          targetDpoDays,
         },
       });
       if (nextMode === "live") {
@@ -189,6 +247,7 @@ export async function POST(request: NextRequest) {
         metadata: {
           paymentMode: nextMode,
           autoPayEnabled,
+          targetDpoDays,
           strictPolicyEnsured: nextMode === "live",
           country,
           displayCurrency,

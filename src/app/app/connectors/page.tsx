@@ -6,6 +6,7 @@ import { requireSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/app/AppShell";
 import { CopyButton } from "@/components/app/CopyButton";
+import { SettingsJsonForm } from "@/components/app/SettingsForms";
 import {
   defaultIngestEmailForSlug,
   ensureMailboxConnector,
@@ -19,7 +20,7 @@ import {
 export default async function ConnectorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sftp?: string }>;
+  searchParams: Promise<{ error?: string; sftp?: string; mailbox?: string }>;
 }) {
   let user;
   try {
@@ -35,6 +36,19 @@ export default async function ConnectorsPage({
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: user.organizationId },
   });
+  const mailbox = await prisma.integrationConnector.findUnique({
+    where: {
+      organizationId_type: { organizationId: user.organizationId, type: "mailbox_imap" },
+    },
+  });
+  const mailboxConfig = JSON.parse(mailbox?.configJson || "{}") as {
+    host?: string;
+    port?: number;
+    secure?: boolean;
+    user?: string;
+    folder?: string;
+  };
+  const mailboxSecrets = JSON.parse(mailbox?.secretsJson || "{}") as { passwordEnc?: string };
   const ingestEmail = org.ingestEmail || defaultIngestEmailForSlug(org.slug);
   const sftpConfig = JSON.parse(sftp.configJson || "{}") as { localIncoming?: string };
   const incomingPath = sftpConfig.localIncoming || "";
@@ -50,12 +64,14 @@ export default async function ConnectorsPage({
   -H 'Idempotency-Key: inv-$(date +%s)' \\
   -d '{
   "external_id": "erp-1001",
-  "currency": "NGN",
+  "currency": "USDC",
   "document": {
     "vendor_name": "Acme Supplies",
     "invoice_number": "INV-1001",
-    "total_amount": 250000,
-    "due_date": "2026-10-31"
+    "total_amount": 25,
+    "currency": "USDC",
+    "due_date": "2026-10-31",
+    "arc_address": "0x0000000000000000000000000000000000000000"
   }
 }'`;
 
@@ -95,6 +111,9 @@ export default async function ConnectorsPage({
       {params.sftp === "synced" ? (
         <p className="mb-4 text-sm text-accent">Drop folder processed.</p>
       ) : null}
+      {params.mailbox === "saved" ? (
+        <p className="mb-4 text-sm text-accent">Mailbox connected. Polling uses the saved IMAP settings.</p>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="dash-panel">
@@ -105,7 +124,52 @@ export default async function ConnectorsPage({
           </div>
           <p className="mt-3 text-[0.72rem] text-muted">
             Webhook: <code>POST /api/ingest/mailbox</code>
+            {mailbox?.status === "connected" ? " · IMAP connected" : " · IMAP not connected"}
+            {mailboxSecrets.passwordEnc ? " · password on file" : ""}
           </p>
+          <SettingsJsonForm action="save_mailbox" className="mt-4 grid gap-3">
+            <label className="text-sm">
+              IMAP host
+              <input name="host" className="input mt-1" defaultValue={mailboxConfig.host || ""} required />
+            </label>
+            <label className="text-sm">
+              User
+              <input name="user" className="input mt-1" defaultValue={mailboxConfig.user || ""} required />
+            </label>
+            <label className="text-sm">
+              App password
+              <input
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                className="input mt-1"
+                placeholder={mailboxSecrets.passwordEnc ? "Leave blank to keep the saved password" : ""}
+                required={!mailboxSecrets.passwordEnc}
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-sm">
+                Port
+                <input
+                  name="port"
+                  type="number"
+                  className="input mt-1"
+                  defaultValue={mailboxConfig.port || 993}
+                />
+              </label>
+              <label className="text-sm">
+                Folder
+                <input name="folder" className="input mt-1" defaultValue={mailboxConfig.folder || "INBOX"} />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input name="secure" type="checkbox" defaultChecked={mailboxConfig.secure !== false} />
+              TLS
+            </label>
+            <button type="submit" className="btn btn-primary w-fit">
+              Save mailbox
+            </button>
+          </SettingsJsonForm>
         </section>
 
         <section className="dash-panel">

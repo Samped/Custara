@@ -76,6 +76,7 @@ export async function matchPurchaseOrder(input: {
   poNumber: string | null | undefined;
   totalAmount: number;
   currency: string;
+  requirePurchaseOrder?: boolean;
 }): Promise<
   Array<{
     code: string;
@@ -85,7 +86,17 @@ export async function matchPurchaseOrder(input: {
   }>
 > {
   const poNumber = (input.poNumber || "").trim();
-  if (!poNumber) return [];
+  if (!poNumber) {
+    if (!input.requirePurchaseOrder) return [];
+    return [
+      {
+        code: "contract_required",
+        severity: "hard",
+        message: "Invoice has no purchase order, and this policy requires one.",
+        evidence: {},
+      },
+    ];
+  }
 
   const po = await prisma.vendorPurchaseOrder.findUnique({
     where: {

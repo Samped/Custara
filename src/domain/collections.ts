@@ -150,18 +150,55 @@ export async function listCollectionsQueue(organizationId: string) {
   });
 }
 
+/** Cadence from how quickly this customer usually pays. */
+export function collectionsCadence(behaviorScore: number) {
+  if (behaviorScore >= 80) {
+    return { initialDelayDays: 7, gapDays: 7, maxReminders: 1 };
+  }
+  if (behaviorScore < 40) {
+    return { initialDelayDays: 1, gapDays: 2, maxReminders: 6 };
+  }
+  return { initialDelayDays: 0, gapDays: 3, maxReminders: null as number | null };
+}
+
+export function receivableReminderDue(input: {
+  now: Date;
+  dueDate: Date;
+  lastReminderAt: Date | null;
+  reminderCount: number;
+  behaviorScore: number;
+}) {
+  const cadence = collectionsCadence(input.behaviorScore);
+  if (cadence.maxReminders != null && input.reminderCount >= cadence.maxReminders) return false;
+  const firstAt = input.dueDate.getTime() + cadence.initialDelayDays * 864e5;
+  if (input.now.getTime() < firstAt) return false;
+  if (!input.lastReminderAt) return true;
+  const nextAt = input.lastReminderAt.getTime() + cadence.gapDays * 864e5;
+  return input.now.getTime() >= nextAt;
+}
+
 /** Send timed follow-up webhooks + optional native email for overdue receivables. */
 export async function runCollectionsDunning() {
   const now = new Date();
-  const overdue = await prisma.receivable.findMany({
+  const candidates = await prisma.receivable.findMany({
     where: {
       status: { in: ["open", "partially_paid"] },
       dueDate: { lt: now },
-      OR: [{ lastReminderAt: null }, { lastReminderAt: { lt: new Date(now.getTime() - 3 * 864e5) } }],
     },
     include: { customer: true },
-    take: 100,
+    take: 200,
   });
+  const overdue = candidates.filter(
+    (r) =>
+      r.dueDate &&
+      receivableReminderDue({
+        now,
+        dueDate: r.dueDate,
+        lastReminderAt: r.lastReminderAt,
+        reminderCount: r.reminderCount,
+        behaviorScore: r.customer.behaviorScore,
+      }),
+  );
 
   const { isMailConfigured, sendEmail } = await import("@/lib/mail");
   const mailOk = isMailConfigured();

@@ -50,6 +50,7 @@ export default async function OnboardingPage({
         industry: String(formData.get("industry") || ""),
         country: String(formData.get("country") || ""),
         website: String(formData.get("website") || ""),
+        socialUrl: String(formData.get("socialUrl") || ""),
       });
     } catch (e) {
       redirect(
@@ -163,6 +164,20 @@ export default async function OnboardingPage({
               className="input"
               placeholder="https://acme.example"
               defaultValue={org.website || ""}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[0.78rem] font-semibold" htmlFor="socialUrl">
+              Social profile{" "}
+              <span className="font-normal text-muted">(LinkedIn, X, Instagram…)</span>
+            </label>
+            <input
+              id="socialUrl"
+              name="socialUrl"
+              className="input"
+              placeholder="https://linkedin.com/company/…"
+              defaultValue={org.socialUrl || ""}
             />
           </div>
 

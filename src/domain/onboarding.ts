@@ -3,6 +3,7 @@ import { writeAudit } from "@/lib/audit";
 import { nanoid } from "nanoid";
 import { defaultIngestEmailForSlug } from "@/domain/mailbox";
 import { currencyFromCountry } from "@/lib/currency";
+import { normalizeHttpUrl } from "@/lib/businessPresence";
 
 export const BUSINESS_TYPES = [
   { value: "company", label: "Company" },
@@ -39,6 +40,7 @@ export async function completeCompanyOnboarding(input: {
   industry?: string;
   country?: string;
   website?: string;
+  socialUrl?: string;
 }) {
   const name = input.name.trim();
   if (name.length < 2) throw new Error("Company name is required");
@@ -48,10 +50,8 @@ export async function completeCompanyOnboarding(input: {
     throw new Error("Select a business type");
   }
 
-  let website = (input.website || "").trim();
-  if (website && !/^https?:\/\//i.test(website)) {
-    website = `https://${website}`;
-  }
+  const website = normalizeHttpUrl(input.website);
+  const socialUrl = normalizeHttpUrl(input.socialUrl);
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: input.organizationId },
@@ -83,7 +83,8 @@ export async function completeCompanyOnboarding(input: {
       industry: (input.industry || "").trim() || null,
       country,
       displayCurrency,
-      website: website || null,
+      website,
+      socialUrl,
       onboardingCompletedAt: new Date(),
       ingestEmail: defaultIngestEmailForSlug(slug),
     },
@@ -101,6 +102,8 @@ export async function completeCompanyOnboarding(input: {
       businessType: updated.businessType,
       country: updated.country,
       displayCurrency: updated.displayCurrency,
+      website: updated.website,
+      socialUrl: updated.socialUrl,
     },
   });
 

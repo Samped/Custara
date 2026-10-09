@@ -91,6 +91,7 @@ export default async function ControlsPage({
       holdOnBankChange: formData.get("holdOnBankChange") === "on",
       holdOnDuplicate: formData.get("holdOnDuplicate") === "on",
       requirePoMatch: formData.get("requirePoMatch") === "on",
+      requirePurchaseOrder: formData.get("requirePurchaseOrder") === "on",
       holdOnUnknownDestination: formData.get("holdOnUnknownDestination") === "on",
       blockAutoApproveUntilAllowlisted: formData.get("blockAutoApproveUntilAllowlisted") === "on",
       minConfidenceForAutoApprove: Number(formData.get("minConfidenceForAutoApprove") || 0.6),
@@ -231,6 +232,14 @@ export default async function ControlsPage({
               defaultChecked={active?.rules.requirePoMatch ?? false}
             />
             Require PO / contract match
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              name="requirePurchaseOrder"
+              type="checkbox"
+              defaultChecked={active?.rules.requirePurchaseOrder ?? false}
+            />
+            Require a purchase order on every invoice
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input

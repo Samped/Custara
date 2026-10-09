@@ -156,25 +156,13 @@ export async function assessRisks(
     }
   }
 
-  // Arc address on invoice but not allowlisted yet
   if (extraction.arcAddress) {
-    const addr = extraction.arcAddress.toLowerCase();
-    const allowed = await prisma.destinationAllowlist.findFirst({
-      where: {
-        organizationId,
-        address: addr,
-        isActive: true,
-        revokedAt: null,
-      },
+    const { screenPayAddress } = await import("@/domain/screening");
+    const screen = await screenPayAddress({
+      organizationId,
+      address: extraction.arcAddress,
     });
-    if (!allowed) {
-      risks.push({
-        code: "destination_not_allowlisted",
-        severity: "hard",
-        message: `Vendor wallet ${addr} is new to this workspace — confirm the destination on this invoice before paying.`,
-        evidence: { address: addr },
-      });
-    }
+    risks.push(...screen.risks);
   }
 
   let bankChanged = false;
@@ -290,7 +278,9 @@ export async function assessRisks(
     });
   }
 
+  const { loadPolicyRules } = await import("@/domain/policy");
   const { matchPurchaseOrder } = await import("@/domain/contracts");
+  const policyRules = await loadPolicyRules(organizationId);
   const poRisks = await matchPurchaseOrder({
     organizationId,
     vendorId: vendor.id,
@@ -298,6 +288,7 @@ export async function assessRisks(
     poNumber: extraction.poNumber,
     totalAmount: extraction.totalAmount,
     currency: extraction.currency,
+    requirePurchaseOrder: Boolean(policyRules.requirePurchaseOrder),
   });
   risks.push(...poRisks);
 

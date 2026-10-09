@@ -92,6 +92,8 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {platformMetrics ? <PlatformInsights metrics={platformMetrics} /> : null}
+
         <section className="product-band shell" aria-label="Product">
           <HeroFilm />
           <div className="product-side">
@@ -112,8 +114,6 @@ export default async function HomePage() {
             </Link>
           </div>
         </section>
-
-        {platformMetrics ? <PlatformInsights metrics={platformMetrics} /> : null}
 
         <div className="shell pb-24 md:pb-32">
           <section className="feature-row mt-2">

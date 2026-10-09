@@ -1301,7 +1301,8 @@ html.dark .login-steps span.on {
   display: grid;
   gap: 1.75rem;
   align-items: center;
-  padding: 0.5rem 0 3.25rem;
+  padding: 2.75rem 0 3.25rem;
+  border-top: 1px solid var(--line);
 }
 
 @media (min-width: 900px) {

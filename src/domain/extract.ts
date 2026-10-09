@@ -262,6 +262,71 @@ export function extractFromText(text: string): Extraction | null {
   });
 }
 
+const EXTRACT_SYSTEM =
+  "Extract invoice fields as JSON. Use numbers for money, ISO dates when known, and null when a field is not on the document. Keys: vendorName, invoiceNumber, issueDate, dueDate, currency, subtotal, taxAmount, totalAmount, poNumber, accountName, accountNumber, bankName, bankCode, arcAddress, lineItems[{description,quantity,unitPrice,amount}], confidence (0-1).";
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function parseModelExtraction(raw: string): Extraction | null {
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const items = Array.isArray(data.lineItems) ? data.lineItems : Array.isArray(data.line_items) ? data.line_items : [];
+  const confidence = asNumber(data.confidence);
+  try {
+    return extractionSchema.parse({
+      vendorName: String(data.vendorName || data.vendor_name || "").trim() || "Unknown Vendor",
+      invoiceNumber: String(data.invoiceNumber || data.invoice_number || "").trim() || "UNKNOWN",
+      issueDate: (data.issueDate || data.issue_date || null) as string | null,
+      dueDate: (data.dueDate || data.due_date || null) as string | null,
+      currency: String(data.currency || "USD").trim() || "USD",
+      subtotal: asNumber(data.subtotal ?? data.sub_total),
+      taxAmount: asNumber(data.taxAmount ?? data.tax_amount),
+      totalAmount: asNumber(data.totalAmount ?? data.total_amount ?? data.amount) ?? 0,
+      poNumber: (data.poNumber || data.po_number || null) as string | null,
+      accountName: (data.accountName || data.account_name || null) as string | null,
+      accountNumber: data.accountNumber || data.account_number ? String(data.accountNumber || data.account_number) : null,
+      bankName: (data.bankName || data.bank_name || null) as string | null,
+      bankCode: data.bankCode || data.bank_code ? String(data.bankCode || data.bank_code) : null,
+      arcAddress: (data.arcAddress || data.arc_address || null) as string | null,
+      lineItems: items.map((item) => {
+        const row = item as Record<string, unknown>;
+        return {
+          description: String(row.description || "Line"),
+          quantity: asNumber(row.quantity) ?? undefined,
+          unitPrice: asNumber(row.unitPrice ?? row.unit_price) ?? undefined,
+          amount: asNumber(row.amount) ?? 0,
+        };
+      }),
+      confidence: confidence == null ? 0.85 : Math.min(1, Math.max(0, confidence)),
+    });
+  } catch (err) {
+    console.warn("[custara] model extraction parse failed", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+async function readModelResponse(res: Response): Promise<Extraction | null> {
+  if (!res.ok) {
+    console.warn("[custara] openai extraction", res.status, (await res.text()).slice(0, 300));
+    return null;
+  }
+  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) return null;
+  return parseModelExtraction(content);
+}
+
 async function maybeLlmExtract(text: string): Promise<Extraction | null> {
   const key = process.env.OPENAI_API_KEY;
   if (!key || !text.trim()) return null;
@@ -276,33 +341,31 @@ async function maybeLlmExtract(text: string): Promise<Extraction | null> {
         model: "gpt-4o-mini",
         response_format: { type: "json_object" },
         messages: [
-          {
-            role: "system",
-            content:
-              "Extract invoice fields as JSON with keys: vendorName, invoiceNumber, issueDate, dueDate, currency, subtotal, taxAmount, totalAmount, poNumber, accountName, accountNumber, bankName, bankCode, arcAddress, lineItems[{description,quantity,unitPrice,amount}], confidence (0-1).",
-          },
-          { role: "user", content: text.slice(0, 12000) },
+          { role: "system", content: EXTRACT_SYSTEM },
+          { role: "user", content: text.slice(0, 24000) },
         ],
       }),
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(25000),
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
-    return extractionSchema.parse(JSON.parse(content));
-  } catch {
+    return await readModelResponse(res);
+  } catch (err) {
+    console.warn("[custara] openai text extraction", err instanceof Error ? err.message : err);
     return null;
   }
 }
 
-async function maybeLlmVisionExtract(buf: Buffer, mimeType: string): Promise<Extraction | null> {
+async function maybeLlmVisionExtract(buf: Buffer, mimeType: string, filename: string): Promise<Extraction | null> {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
+  if (!key || buf.length === 0 || buf.length > 12_000_000) return null;
+  const b64 = buf.toString("base64");
+  const filePart =
+    mimeType === "application/pdf"
+      ? {
+          type: "file",
+          file: { filename: filename || "invoice.pdf", file_data: `data:application/pdf;base64,${b64}` },
+        }
+      : { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } };
   try {
-    const b64 = buf.toString("base64");
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -313,32 +376,15 @@ async function maybeLlmVisionExtract(buf: Buffer, mimeType: string): Promise<Ext
         model: "gpt-4o-mini",
         response_format: { type: "json_object" },
         messages: [
-          {
-            role: "system",
-            content:
-              "Extract invoice fields from this document image as JSON with keys: vendorName, invoiceNumber, issueDate, dueDate, currency, subtotal, taxAmount, totalAmount, poNumber, accountName, accountNumber, bankName, bankCode, arcAddress, lineItems[{description,quantity,unitPrice,amount}], confidence (0-1).",
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: { url: `data:${mimeType};base64,${b64}` },
-              },
-            ],
-          },
+          { role: "system", content: EXTRACT_SYSTEM },
+          { role: "user", content: [filePart] },
         ],
       }),
       signal: AbortSignal.timeout(45000),
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
-    return extractionSchema.parse(JSON.parse(content));
-  } catch {
+    return await readModelResponse(res);
+  } catch (err) {
+    console.warn("[custara] openai vision extraction", err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -402,41 +448,32 @@ export async function extractInvoice(invoiceId: string): Promise<Extraction> {
       text = buf.toString("utf8");
     }
 
-    if (text) {
-      const fromText = extractFromText(text);
-      if (fromText) {
-        extraction = fromText;
+    if (process.env.OPENAI_API_KEY && binary) {
+      const mime = doc.mimeType.startsWith("image/")
+        ? doc.mimeType
+        : doc.mimeType.includes("pdf") || doc.filename.toLowerCase().endsWith(".pdf")
+          ? "application/pdf"
+          : "image/png";
+      const fromVision = await maybeLlmVisionExtract(buf, mime, doc.filename);
+      if (fromVision && (fromVision.totalAmount > 0 || fromVision.vendorName !== "Unknown Vendor")) {
+        extraction = fromVision;
         break;
       }
+    }
+
+    if (process.env.OPENAI_API_KEY && text) {
       const fromLlm = await maybeLlmExtract(text);
-      if (fromLlm) {
+      if (fromLlm && (fromLlm.totalAmount > 0 || fromLlm.vendorName !== "Unknown Vendor")) {
         extraction = fromLlm;
         break;
       }
     }
 
-    if (binary) {
-      const mime = doc.mimeType.startsWith("image/")
-        ? doc.mimeType
-        : doc.mimeType.includes("pdf")
-          ? "application/pdf"
-          : "image/png";
-      // Vision works best on images; for PDF without text, try LLM on pdf text already attempted
-      if (mime.startsWith("image/")) {
-        const fromVision = await maybeLlmVisionExtract(buf, mime);
-        if (fromVision) {
-          extraction = fromVision;
-          break;
-        }
-      } else if (!text) {
-        // Scanned PDF with no extractable text — ask LLM with a note (text path already failed)
-        const fromLlm = await maybeLlmExtract(
-          `[PDF binary invoice filename=${doc.filename} size=${buf.length}. No extractable text. Return best-effort empty fields with low confidence if unknown.]`,
-        );
-        if (fromLlm && fromLlm.totalAmount > 0) {
-          extraction = fromLlm;
-          break;
-        }
+    if (text) {
+      const fromText = extractFromText(text);
+      if (fromText) {
+        extraction = fromText;
+        break;
       }
     }
   }

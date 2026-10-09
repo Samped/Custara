@@ -37,6 +37,8 @@ services:
         value: "false"
       - key: STORAGE_BACKEND
         value: s3
+      - key: OPENAI_API_KEY
+        sync: false
       - key: SESSION_SECRET
         sync: false
       - key: ENCRYPTION_KEY

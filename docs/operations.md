@@ -77,7 +77,7 @@ Copy the **external** Postgres URL and the Key Value URL for Vercel. The worker 
 
 ### Vercel
 
-Import the GitHub repository. Framework is Next.js. Node.js is 20. Set the same `DATABASE_URL` (external), `REDIS_URL` (`rediss://`), `SESSION_SECRET`, `ENCRYPTION_KEY`, Circle keys, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and the R2 variables.
+Import the GitHub repository. Framework is Next.js. Node.js is 20. Set the same `DATABASE_URL` (external), `REDIS_URL` (`rediss://`), `SESSION_SECRET`, `ENCRYPTION_KEY`, `OPENAI_API_KEY`, Circle keys, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and the R2 variables. `OPENAI_API_KEY` is required for invoice extraction on both Vercel and the worker.
 
 Set `ALLOW_JIT_ORG_CREATION=true` only until the first workspace exists, then remove it and redeploy. Production does not create a workspace for an unknown email when that variable is unset.
 

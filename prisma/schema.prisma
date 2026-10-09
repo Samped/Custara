@@ -348,6 +348,8 @@ model InvoiceDocument {
   filename      String
   mimeType      String
   storagePath   String
+  /// File bytes. Shared by the web app and the worker; the host disk is not.
+  content       Bytes?
   byteSize      Int
   checksumSha256 String?
   retainedUntil DateTime?

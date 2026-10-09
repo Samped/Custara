@@ -1,10 +1,7 @@
-import { readFile } from "fs/promises";
-import path from "path";
+import { getObject } from "@/lib/storage";
 import { prisma } from "@/lib/db";
 import { extractionSchema, type Extraction } from "@/lib/types";
 import { encryptField, last4 } from "@/lib/crypto";
-
-const STORAGE_ROOT = path.join(process.cwd(), "storage");
 
 function parseLooseJson(text: string): Record<string, unknown> | null {
   try {
@@ -387,8 +384,7 @@ export async function extractInvoice(invoiceId: string): Promise<Extraction> {
   let extraction: Extraction | null = null;
 
   for (const doc of docs) {
-    const abs = path.join(STORAGE_ROOT, doc.storagePath);
-    const buf = await readFile(abs);
+    const buf = doc.content?.byteLength ? Buffer.from(doc.content) : await getObject(doc.storagePath);
     const binary = isBinaryDoc(doc.mimeType, doc.filename);
 
     if (doc.mimeType.includes("json") || doc.filename.endsWith(".json")) {

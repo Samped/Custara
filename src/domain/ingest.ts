@@ -1,15 +1,11 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { prisma } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { dispatchWebhook } from "@/lib/webhooks";
 import { sha256 } from "@/lib/crypto";
 import { enqueueJob } from "@/lib/jobs";
 
-const STORAGE_ROOT = path.join(process.cwd(), "storage");
-
 export async function ensureStorage() {
-  await mkdir(STORAGE_ROOT, { recursive: true });
+  return;
 }
 
 export async function ingestInvoice(input: {
@@ -44,11 +40,6 @@ export async function ingestInvoice(input: {
     const org = await prisma.organization.findUniqueOrThrow({
       where: { id: input.organizationId },
     });
-    const rel = path.join(input.organizationId, `${invoice.id}-${input.filename}`);
-    const abs = path.join(STORAGE_ROOT, rel);
-    await mkdir(path.dirname(abs), { recursive: true });
-    await writeFile(abs, input.bytes);
-
     const retainedUntil = org.privacyMode
       ? new Date(Date.now() + org.privacyDeleteDays * 24 * 60 * 60 * 1000)
       : null;
@@ -58,7 +49,8 @@ export async function ingestInvoice(input: {
         invoiceId: invoice.id,
         filename: input.filename,
         mimeType: input.mimeType || "application/octet-stream",
-        storagePath: rel,
+        storagePath: `db/${invoice.id}/${input.filename}`,
+        content: input.bytes,
         byteSize: input.bytes.length,
         checksumSha256: sha256(input.bytes),
         retainedUntil,
@@ -68,16 +60,13 @@ export async function ingestInvoice(input: {
 
   if (input.structuredPayload) {
     const payload = Buffer.from(JSON.stringify(input.structuredPayload, null, 2), "utf8");
-    const rel = path.join(input.organizationId, `${invoice.id}.json`);
-    const abs = path.join(STORAGE_ROOT, rel);
-    await mkdir(path.dirname(abs), { recursive: true });
-    await writeFile(abs, payload);
     await prisma.invoiceDocument.create({
       data: {
         invoiceId: invoice.id,
         filename: input.filename || "invoice.json",
         mimeType: "application/json",
-        storagePath: rel,
+        storagePath: `db/${invoice.id}/invoice.json`,
+        content: payload,
         byteSize: payload.length,
         checksumSha256: sha256(payload),
       },

@@ -19,12 +19,16 @@ export async function purgeExpiredDocuments(limit = 200) {
   const errors: string[] = [];
   for (const doc of docs) {
     try {
-      if (doc.storagePath) {
-        await deleteObject(doc.storagePath);
+      if (doc.storagePath && !doc.storagePath.startsWith("db/") && !doc.storagePath.startsWith("purged:")) {
+        try {
+          await deleteObject(doc.storagePath);
+        } catch {
+          // The bytes may already live only on the document row.
+        }
       }
       await prisma.invoiceDocument.update({
         where: { id: doc.id },
-        data: { deletedAt: now, byteSize: 0, storagePath: `purged:${doc.id}` },
+        data: { deletedAt: now, byteSize: 0, content: null, storagePath: `purged:${doc.id}` },
       });
       await writeAudit({
         organizationId: doc.invoice.organizationId,

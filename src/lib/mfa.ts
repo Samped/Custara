@@ -92,15 +92,6 @@ export async function userNeedsMfaChallenge(user: {
   mfaSecretEnc: string | null;
   organization: { mfaRequiredForRoles: string };
 }) {
-  let required: string[] = ["admin", "payer", "approver"];
-  try {
-    required = JSON.parse(user.organization.mfaRequiredForRoles) as string[];
-  } catch {
-    // keep default
-  }
-  if (required.includes(user.role) && (!user.mfaEnabled || !user.mfaSecretEnc)) {
-    return "enroll" as const;
-  }
   if (user.mfaEnabled && user.mfaSecretEnc) return "challenge" as const;
   return "none" as const;
 }

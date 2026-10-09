@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { requireSessionUser } from "@/lib/auth";
+import { canAdmin, requireSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/app/AppShell";
-import { BeginMfaForm, ConfirmMfaForm, DisableMfaForm } from "@/components/app/SettingsForms";
+import { BeginMfaForm, ConfirmMfaForm, DisableMfaForm, SettingsJsonForm } from "@/components/app/SettingsForms";
 import { MfaEnrollPanel } from "@/components/app/MfaEnrollPanel";
 
 export default async function SecurityPage({
@@ -18,7 +18,11 @@ export default async function SecurityPage({
   }
 
   const params = await searchParams;
-  const me = await prisma.workspaceUser.findUniqueOrThrow({ where: { id: user.id } });
+  const me = await prisma.workspaceUser.findUniqueOrThrow({
+    where: { id: user.id },
+    include: { organization: { select: { mfaPayThresholdUsd: true } } },
+  });
+  const threshold = me.organization.mfaPayThresholdUsd ?? 5000;
 
   return (
     <AppShell user={user} title="Security">
@@ -50,6 +54,32 @@ export default async function SecurityPage({
           </div>
         )}
       </section>
+
+      {canAdmin(user.role) ? (
+        <section className="dash-panel mt-6">
+          <h2 className="dash-h">Payment MFA</h2>
+          <p className="dash-sub mt-1">
+            Authenticator step-up applies to payments at or above this USD amount. Smaller payments do not require a code.
+          </p>
+          <SettingsJsonForm action="save_mfa_threshold" className="mt-4 max-w-sm space-y-3">
+            <label className="block text-sm">
+              Require MFA at or above (USD)
+              <input
+                name="mfaPayThresholdUsd"
+                className="input mt-1"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue={threshold}
+                required
+              />
+            </label>
+            <button type="submit" className="btn btn-primary">
+              Save threshold
+            </button>
+          </SettingsJsonForm>
+        </section>
+      ) : null}
     </AppShell>
   );
 }

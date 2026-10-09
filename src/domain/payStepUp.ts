@@ -5,7 +5,7 @@ export const MFA_SETUP_REQUIRED_CODE = "MFA_SETUP_REQUIRED";
 
 /**
  * Step-up MFA for money movement.
- * - User pay: MFA must be enabled; then TOTP required
+ * - User pay: MFA only when amountUsd is at or above the org threshold
  * - System autopay: no MFA
  * - API keys: require X-Custara-Step-Up in live mode when API_PAY_STEPUP_SECRET is set
  */
@@ -13,14 +13,16 @@ export async function assertPayStepUp(input: {
   organizationId: string;
   actorType: "user" | "system" | "api_key";
   actorId?: string;
+  amountUsd?: number | null;
   mfaCode?: string | null;
   apiStepUpToken?: string | null;
 }) {
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: input.organizationId },
-    select: { paymentMode: true },
+    select: { paymentMode: true, mfaPayThresholdUsd: true },
   });
   const live = org.paymentMode === "live";
+  const threshold = org.mfaPayThresholdUsd ?? 5000;
 
   if (input.actorType === "system") {
     return;
@@ -28,11 +30,12 @@ export async function assertPayStepUp(input: {
 
   if (input.actorType === "user") {
     if (!input.actorId) throw new Error("Pay step-up requires actorId");
+    if ((input.amountUsd ?? threshold) < threshold) return;
     const user = await prisma.workspaceUser.findUniqueOrThrow({ where: { id: input.actorId } });
 
     if (!user.mfaEnabled || !user.mfaSecretEnc) {
       throw new Error(
-        `${MFA_SETUP_REQUIRED_CODE}: Set up MFA before sending payments. Open Settings → MFA to enable authenticator protection.`,
+        `${MFA_SETUP_REQUIRED_CODE}: Set up MFA before sending payments at or above the organization threshold. Open Security to enable authenticator protection.`,
       );
     }
 

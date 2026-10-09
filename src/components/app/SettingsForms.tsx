@@ -70,6 +70,9 @@ export function SettingsJsonForm({
       if (action === "save_mfa_roles" && !body.mfaRoles) {
         body.mfaRoles = [];
       }
+      if (action === "save_mailbox") {
+        body.secure = fd.get("secure") === "on";
+      }
       transform?.(fd, body);
       const data = await postSettings(body);
       if (data.redirectTo) router.push(data.redirectTo);

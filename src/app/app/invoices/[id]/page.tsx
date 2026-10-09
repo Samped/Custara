@@ -4,6 +4,7 @@ import { requireSessionUser, canPay } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/app/AppShell";
 import { formatDate, formatMoney, statusBadgeClass } from "@/lib/format";
+import { convertAmount } from "@/lib/currency";
 import { InvoiceActionForm } from "@/components/app/InvoiceActionForm";
 import { MfaSetupRequired } from "@/components/app/MfaSetupRequired";
 
@@ -33,6 +34,14 @@ export default async function InvoiceWorkbenchPage({
   });
 
   if (!invoice) notFound();
+
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: user.organizationId },
+    select: { mfaPayThresholdUsd: true },
+  });
+  const payThresholdUsd = org.mfaPayThresholdUsd ?? 5000;
+  const payAmountUsd = convertAmount(invoice.totalAmount || 0, invoice.currency, "USD");
+  const mfaRequiredForPay = payAmountUsd >= payThresholdUsd;
 
   const pendingApproval = invoice.approvalRequests.find((a) => a.status === "pending");
   const latestIntent = invoice.paymentIntents[0];
@@ -275,7 +284,7 @@ export default async function InvoiceWorkbenchPage({
           {invoice.status === "approved" && canPay(user.role) ? (
             <div className="card p-5">
               <h3 className="app-h">Create payment intent</h3>
-              {!user.mfaEnabled ? (
+              {mfaRequiredForPay && !user.mfaEnabled ? (
                 <div className="mt-3">
                   <MfaSetupRequired />
                 </div>
@@ -288,7 +297,7 @@ export default async function InvoiceWorkbenchPage({
               ) : (
                 <p className="app-sub">Creates a payment intent after policy checks.</p>
               )}
-              {user.mfaEnabled ? (
+              {mfaRequiredForPay && !user.mfaEnabled ? null : (
                 <InvoiceActionForm
                   action="create_payment"
                   className="mt-4 space-y-3"
@@ -300,17 +309,19 @@ export default async function InvoiceWorkbenchPage({
                     name="idempotencyKey"
                     value={`pay_${invoice.id}_${invoice.invoiceNumber || "x"}`}
                   />
-                  <label className="block text-sm">
-                    Step-up MFA code
-                    <input
-                      name="mfaCode"
-                      className="input mt-1"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="6-digit TOTP"
-                      required
-                    />
-                  </label>
+                  {mfaRequiredForPay ? (
+                    <label className="block text-sm">
+                      Step-up MFA code
+                      <input
+                        name="mfaCode"
+                        className="input mt-1"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="6-digit TOTP"
+                        required
+                      />
+                    </label>
+                  ) : null}
                   <button
                     type="submit"
                     className="btn btn-primary w-full"
@@ -319,7 +330,7 @@ export default async function InvoiceWorkbenchPage({
                     Initiate payment
                   </button>
                 </InvoiceActionForm>
-              ) : null}
+              )}
             </div>
           ) : null}
 

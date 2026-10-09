@@ -5,7 +5,7 @@ import { NavMenu } from "./NavMenu";
 import { ThemeToggle } from "./ThemeProvider";
 import { PageAtmosphere } from "./GridAtmosphere";
 import { CurrencyToggle } from "./CurrencyToggle";
-import { MfaBanner } from "./MfaBanner";
+import { LiveRefresh } from "./LiveRefresh";
 
 export function AppShell({
   user,
@@ -26,6 +26,7 @@ export function AppShell({
 
   return (
     <PageAtmosphere>
+      <LiveRefresh />
       <div className="app-shell">
         <header className="app-header">
           <div className="shell flex h-12 items-center justify-between gap-3">
@@ -56,7 +57,6 @@ export function AppShell({
         </header>
 
         <main className="shell app-main">
-          {!user.mfaEnabled && title !== "Security" ? <MfaBanner /> : null}
           <header className="app-page-head">
             <h1 className="page-title">{title}</h1>
             {subtitle ? <p className="page-subtitle">{subtitle}</p> : null}

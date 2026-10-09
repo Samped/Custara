@@ -2,10 +2,6 @@ import Link from "next/link";
 import { formatMoney } from "@/lib/format";
 import type { PlatformMetrics } from "@/domain/platformMetrics";
 
-function pct(rate: number) {
-  return `${Math.round(rate * 100)}%`;
-}
-
 export function PlatformInsights({ metrics }: { metrics: PlatformMetrics }) {
   const stats = [
     {
@@ -24,9 +20,9 @@ export function PlatformInsights({ metrics }: { metrics: PlatformMetrics }) {
       note: `${metrics.transactionsTotal} transactions`,
     },
     {
-      value: pct(metrics.successRate),
-      label: "Success",
-      note: `${metrics.duplicatesDetected} duplicates caught`,
+      value: metrics.duplicatesDetected.toLocaleString(),
+      label: "Duplicates",
+      note: "caught across the network",
     },
   ];
 

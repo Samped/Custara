@@ -61,6 +61,44 @@ npm run build --prefix cli
 
 Output is `cli/dist` and is not committed. Install with `npm i -g ./cli` from the repository root.
 
+## Hosting on Vercel and Render
+
+The public site is the Next.js app on Vercel at `https://custara.xyz`. Postgres, Redis, and the worker run on Render’s free plan. `render.yaml` at the repository root is the blueprint.
+
+Free Render Postgres is 1 GB, has no backups, and expires 30 days after creation. After a 14-day grace period Render deletes it. Free Key Value is 25 MB and does not keep data across restarts. The worker is a free web service, because background workers are not on the free plan. It sleeps after 15 minutes without HTTP traffic. Autopay, webhook delivery, and polls resume when the next request wakes it. A ping every 10 minutes to the worker `/health` URL keeps it awake.
+
+Vercel and the worker do not share a disk. Set `STORAGE_BACKEND=s3` and point `S3_ENDPOINT` at a Cloudflare R2 bucket (or another S3-compatible store). Invoice files fail in production without that.
+
+### Render
+
+Create a Blueprint from this repository. The worker build installs dev dependencies because `tsx` and the Prisma CLI live there. The pre-deploy command is `npx prisma db push`. Do not seed.
+
+Copy the **external** Postgres URL and the Key Value URL for Vercel. The worker receives the internal URLs from the blueprint. Fill the prompted secrets on the worker: `SESSION_SECRET`, `ENCRYPTION_KEY`, Circle keys, `ARC_CHAIN`, and the R2 keys. `APP_URL` is `https://custara.xyz`.
+
+### Vercel
+
+Import the GitHub repository. Framework is Next.js. Node.js is 20. Set the same `DATABASE_URL` (external), `REDIS_URL` (`rediss://`), `SESSION_SECRET`, `ENCRYPTION_KEY`, Circle keys, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and the R2 variables.
+
+Set `ALLOW_JIT_ORG_CREATION=true` only until the first workspace exists, then remove it and redeploy. Production does not create a workspace for an unknown email when that variable is unset.
+
+### DNS
+
+At the registrar for `custara.xyz`:
+
+| Record | Name | Value |
+|--------|------|--------|
+| A | `@` | `76.76.21.21` |
+| CNAME | `www` | `cname.vercel-dns.com` |
+
+Add `custara.xyz` and `www.custara.xyz` in the Vercel project and wait for the certificate.
+
+### After the first deploy
+
+- `GET https://custara.xyz/api/health` returns `ok: true` when Postgres and Redis answer.
+- Circle webhooks go to `https://custara.xyz/api/webhooks/circle`.
+- `CIRCLE_WEBHOOK_SECRET` is set on Vercel. Production rejects unsigned Circle webhooks.
+- The worker log shows `worker health listening`.
+
 ## Production checklist
 
 - `SESSION_SECRET` and `ENCRYPTION_KEY` are long random values, not the examples

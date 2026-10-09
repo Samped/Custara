@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Keep pdf-parse on the Node runtime (not the browser bundle) for PDF text extraction.
-  serverExternalPackages: ["pdf-parse"],
+  // Keep native and Node-only libraries out of the Turbopack server bundle.
+  serverExternalPackages: ["pdf-parse", "ssh2", "ssh2-sftp-client"],
 };
 
 export default nextConfig;

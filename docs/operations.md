@@ -71,7 +71,7 @@ Vercel and the worker do not share a disk. Set `STORAGE_BACKEND=s3` and point `S
 
 ### Render
 
-Create a Blueprint from this repository. The worker build installs dev dependencies because `tsx` and the Prisma CLI live there. The pre-deploy command is `npx prisma db push`. Do not seed.
+Create a Blueprint from this repository. The worker build installs dev dependencies because `tsx` and the Prisma CLI live there. The free plan does not allow a pre-deploy command, so the start command runs `npx prisma db push` and then the worker. Do not seed.
 
 Copy the **external** Postgres URL and the Key Value URL for Vercel. The worker receives the internal URLs from the blueprint. Fill the prompted secrets on the worker: `SESSION_SECRET`, `ENCRYPTION_KEY`, Circle keys, `ARC_CHAIN`, and the R2 keys. `APP_URL` is `https://custara.xyz`.
 

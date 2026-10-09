@@ -9,8 +9,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm install --include=dev && npx prisma generate
-    preDeployCommand: npx prisma db push
-    startCommand: npm run worker
+    startCommand: npx prisma db push --skip-generate && npm run worker
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION

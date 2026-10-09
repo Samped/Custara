@@ -29,13 +29,13 @@ export function AppShell({
       <LiveRefresh />
       <div className="app-shell">
         <header className="app-header">
-          <div className="shell flex h-12 items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
+          <div className="shell app-header-bar">
+            <div className="app-header-brand">
               <BrandLogo href="/app" size={30} wordmarkClassName="text-[0.95rem]" />
               <div className="hidden h-3.5 w-px bg-[var(--line)] sm:block" aria-hidden />
               <NavMenu />
             </div>
-            <div className="flex items-center gap-2 text-[0.78rem]">
+            <div className="app-header-tools">
               <span className="badge bg-accent-soft text-accent">
                 {user.paymentMode === "live" ? "live rails" : "simulated"}
               </span>

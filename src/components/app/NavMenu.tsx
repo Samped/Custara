@@ -60,7 +60,7 @@ export function NavMenu() {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="text-muted">Go to</span>
+        <span className="nav-kicker text-muted">Go to</span>
         <span className="text-foreground">{label}</span>
         <svg
           width="12"

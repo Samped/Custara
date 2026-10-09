@@ -174,6 +174,32 @@ html.dark .brand-logo-img-light {
   border-bottom: 1px solid var(--line);
   background: var(--header-bg);
   backdrop-filter: blur(16px) saturate(1.15);
+  padding-top: env(safe-area-inset-top);
+}
+
+.app-header-bar,
+.site-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+}
+
+.app-header-brand,
+.app-header-tools {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.app-header-brand {
+  gap: 0.65rem;
+}
+
+.app-header-tools {
+  gap: 0.45rem;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -1967,14 +1993,212 @@ a.net-proof-kicker:hover {
     gap: 1.25rem;
   }
 
+  .docs-shell {
+    padding-top: 1.35rem;
+  }
+
   .docs-nav {
     position: static;
     max-height: none;
     flex-direction: row;
-    gap: 1.5rem;
-    overflow: auto;
-    padding-bottom: 0.4rem;
+    align-items: center;
+    gap: 1.15rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.7rem;
     border-bottom: 1px solid var(--line);
+  }
+
+  .docs-nav > div {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 0 0 auto;
+  }
+
+  .docs-nav-label {
+    margin: 0;
+  }
+
+  .docs-nav ul {
+    display: flex;
+    gap: 0.85rem;
+  }
+
+  .docs-nav li {
+    flex: 0 0 auto;
+  }
+}
+
+.site-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 760px) {
+  .shell {
+    width: min(1120px, calc(100% - 1.5rem));
+  }
+
+  body {
+    overflow-x: clip;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .app-header-bar,
+  .site-header-bar {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 0.45rem;
+    min-height: 3.25rem;
+    padding-block: 0.55rem;
+  }
+
+  .app-header-brand {
+    flex: 1 1 auto;
+    gap: 0.45rem;
+  }
+
+  .app-header-tools,
+  .site-header-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .nav-kicker {
+    display: none;
+  }
+
+  .nav-trigger,
+  .app-shell .nav-trigger,
+  .app-shell .btn,
+  .app-shell .btn-black,
+  .site-header-actions .btn,
+  .currency-toggle-select,
+  .app-shell .input,
+  .app-shell select.input {
+    min-height: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .app-shell textarea.input {
+    height: auto;
+    min-height: 5.5rem;
+  }
+
+  .nav-menu {
+    min-width: min(18rem, calc(100vw - 1.5rem));
+  }
+
+  .nav-menu a,
+  .nav-menu button.menu-item {
+    min-height: 2.75rem;
+  }
+
+  .section-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .section-tab {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    min-height: 2.75rem;
+    white-space: nowrap;
+  }
+
+  .hero-stage {
+    min-height: 0;
+    align-items: start;
+    gap: 1.75rem;
+    padding-top: 2rem;
+    padding-bottom: 2.25rem;
+  }
+
+  .hero-stage h1 {
+    font-size: clamp(2.7rem, 14vw, 3.6rem);
+  }
+
+  .hero-actions {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.85rem 1.15rem;
+    margin-top: 1.5rem;
+  }
+
+  .hero-actions .btn-black,
+  .hero-actions .hero-api {
+    min-height: 2.75rem;
+  }
+
+  .hero-actions .hero-api {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .net-proof {
+    padding: 2rem 0 1.75rem;
+  }
+
+  .net-proof dl {
+    gap: 1.35rem 1rem;
+  }
+
+  .product-band {
+    padding: 2rem 0 2.25rem;
+  }
+
+  .dash-panel,
+  .dash-connect {
+    padding: 0.9rem;
+  }
+
+  .dash-panel-head {
+    flex-wrap: wrap;
+  }
+
+  .dash-stat-side {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .dash-list li {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .dash-upload input[type="file"] {
+    max-width: 100%;
+  }
+
+  .dash-panel-flush,
+  .card.overflow-hidden {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dash-panel-flush > .table,
+  .card > .table {
+    min-width: 40rem;
+  }
+
+  .login-panel {
+    padding: 1.4rem 1.15rem;
+  }
+
+  .docs-nav a {
+    padding: 0.55rem 0;
+    white-space: nowrap;
+  }
+
+  .docs-prose pre,
+  .app-shell pre {
+    max-width: 100%;
   }
 }
 

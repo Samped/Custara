@@ -60,6 +60,8 @@ export type PolicyRules = {
   holdOnDuplicate: boolean;
   /** PayablesAI strict: require matched open PO when invoice has poNumber */
   requirePoMatch?: boolean;
+  /** Hold invoices that have no purchase order. */
+  requirePurchaseOrder?: boolean;
   /** Hold when Arc destination is not allowlisted */
   holdOnUnknownDestination?: boolean;
   /** Block auto-approve when invoice has an Arc address until allowlisted */
@@ -78,6 +80,7 @@ export const PAYABLESAI_STRICT_RULES: PolicyRules = {
   holdOnBankChange: true,
   holdOnDuplicate: true,
   requirePoMatch: true,
+  requirePurchaseOrder: true,
   holdOnUnknownDestination: true,
   blockAutoApproveUntilAllowlisted: true,
   minConfidenceForAutoApprove: 0.75,

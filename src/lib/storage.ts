@@ -50,7 +50,7 @@ export async function putObject(relPath: string, data: Buffer | string, contentT
     return { backend: "s3", path: relPath, contentType: type };
   }
 
-  const abs = path.join(ROOT, relPath);
+  const abs = path.join(/*turbopackIgnore: true*/ ROOT, relPath);
   await mkdir(path.dirname(abs), { recursive: true });
   await writeFile(abs, body);
   return { backend: "local", path: relPath, contentType: type };
@@ -67,7 +67,7 @@ export async function getObject(relPath: string): Promise<Buffer> {
     if (!bytes) throw new Error("Empty S3 object");
     return Buffer.from(bytes);
   }
-  return readFile(path.join(ROOT, relPath));
+  return readFile(path.join(/*turbopackIgnore: true*/ ROOT, relPath));
 }
 
 export async function deleteObject(relPath: string): Promise<void> {
@@ -81,7 +81,7 @@ export async function deleteObject(relPath: string): Promise<void> {
   }
   const { unlink } = await import("fs/promises");
   try {
-    await unlink(path.join(ROOT, relPath));
+    await unlink(path.join(/*turbopackIgnore: true*/ ROOT, relPath));
   } catch (e) {
     const err = e as NodeJS.ErrnoException;
     if (err.code !== "ENOENT") throw e;
@@ -108,7 +108,7 @@ export async function storageHealth(): Promise<{ ok: boolean; backend: string; d
       await client.send(new HeadBucketCommand({ Bucket: bucket }));
       return { ok: true, backend: "s3" };
     }
-    await mkdir(ROOT, { recursive: true });
+    await mkdir(path.join(/*turbopackIgnore: true*/ ROOT), { recursive: true });
     return { ok: true, backend: "local" };
   } catch (e) {
     return { ok: false, backend: backend(), detail: e instanceof Error ? e.message : "storage error" };

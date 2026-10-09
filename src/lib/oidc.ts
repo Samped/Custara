@@ -114,13 +114,6 @@ export async function finishOidcLogin(input: {
     await setMfaPending(user.id);
     return { userId: user.id, needsMfa: true };
   }
-  if (need === "enroll") {
-    if (user.role === "admin") {
-      await createSession(user.id);
-      return { userId: user.id, needsMfa: false };
-    }
-    throw new Error("MFA enrollment required before SSO access");
-  }
 
   await createSession(user.id);
   return { userId: user.id, needsMfa: false };

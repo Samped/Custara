@@ -109,11 +109,7 @@ export async function destroySession() {
   cookieStore.delete(MFA_PENDING_COOKIE);
 }
 
-export async function getSessionUser(): Promise<SessionUser | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-
+export async function sessionUserFromToken(token: string): Promise<SessionUser | null> {
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
     include: { user: { include: { organization: true } } },
@@ -144,14 +140,38 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   };
 }
 
-export async function requireSessionUser(roles?: Role[], capability?: AppCapability) {
-  const user = await getSessionUser();
-  if (!user) throw new AuthError("Unauthorized", 401);
+export async function getSessionUser(): Promise<SessionUser | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  return sessionUserFromToken(token);
+}
+
+function assertSessionAccess(user: SessionUser, roles?: Role[], capability?: AppCapability) {
   if (roles && !roles.includes(user.role) && user.role !== "admin") {
     throw new AuthError("Forbidden", 403);
   }
   if (capability) assertCapability(user.role, capability);
   return user;
+}
+
+export async function requireSessionUser(roles?: Role[], capability?: AppCapability) {
+  const user = await getSessionUser();
+  if (!user) throw new AuthError("Unauthorized", 401);
+  return assertSessionAccess(user, roles, capability);
+}
+
+/** CLI login token (session bearer), not an API key. */
+export async function requireUserBearer(request: Request, roles?: Role[], capability?: AppCapability) {
+  const header = request.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) throw new AuthError("Unauthorized", 401);
+  const token = header.slice("Bearer ".length).trim();
+  if (!token || token.startsWith("cst_live_")) {
+    throw new AuthError("User session required. Run custara login --email.", 401);
+  }
+  const user = await sessionUserFromToken(token);
+  if (!user) throw new AuthError("Unauthorized", 401);
+  return assertSessionAccess(user, roles, capability);
 }
 
 export function isEmailDomainAllowed(email: string) {

@@ -86,7 +86,8 @@ export async function requestEmailOtp(email: string) {
 /** @deprecated use requestEmailOtp */
 export const requestSandboxEmailOtp = requestEmailOtp;
 
-export async function verifyEmailOtp(email: string, code: string) {
+/** Validate and consume an email code without creating a browser session. */
+export async function consumeEmailOtp(email: string, code: string) {
   const normalized = email.trim().toLowerCase();
   const challenge = await prisma.loginChallenge.findFirst({
     where: { email: normalized, consumedAt: null, expiresAt: { gt: new Date() } },
@@ -115,6 +116,11 @@ export async function verifyEmailOtp(email: string, code: string) {
     data: { consumedAt: new Date() },
   });
 
+  return normalized;
+}
+
+export async function verifyEmailOtp(email: string, code: string) {
+  const normalized = await consumeEmailOtp(email, code);
   return completeEmailLogin(normalized, { method: "email_otp" });
 }
 
@@ -258,25 +264,6 @@ export async function completeEmailLogin(
     await setMfaPending(user.id);
     return {
       redirect: "/login?step=mfa",
-      organizationId: user.organizationId,
-      userId: user.id,
-      jitCreated,
-    };
-  }
-  if (need === "enroll") {
-    if (user.role === "admin") {
-      await createSession(user.id);
-      const needsOnboarding = !user.organization.onboardingCompletedAt;
-      return {
-        redirect: needsOnboarding ? "/app/onboarding" : "/app/onboarding/mfa",
-        organizationId: user.organizationId,
-        userId: user.id,
-        jitCreated,
-      };
-    }
-    await createSession(user.id);
-    return {
-      redirect: "/app/security",
       organizationId: user.organizationId,
       userId: user.id,
       jitCreated,

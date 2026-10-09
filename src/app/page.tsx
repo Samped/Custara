@@ -3,10 +3,14 @@ import { getSessionUser } from "@/lib/auth";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { ThemeToggle } from "@/components/app/ThemeProvider";
 import { BrandDot, PageAtmosphere } from "@/components/app/GridAtmosphere";
-import { HeroGlobe } from "@/components/app/HeroGlobe";
+import { CopyButton } from "@/components/app/CopyButton";
+import { HeroFilm } from "@/components/app/HeroFilm";
 import { HeroType } from "@/components/app/HeroType";
 import { PlatformInsights } from "@/components/app/PlatformInsights";
 import { getPlatformMetrics } from "@/domain/platformMetrics";
+
+const cliInstall = `npm run build --prefix cli
+npm i -g ./cli`;
 
 const features = [
   {
@@ -81,9 +85,21 @@ export default async function HomePage() {
                 API
               </Link>
             </div>
+            <div className="hero-cli">
+              <div className="hero-cli-head">
+                <span>CLI</span>
+                <span className="hero-cli-actions">
+                  <Link href="/docs/cli">Install guide</Link>
+                  <CopyButton value={cliInstall} label="Copy" className="btn btn-secondary hero-cli-copy" />
+                </span>
+              </div>
+              <pre className="hero-cli-cmd">
+                <code>{cliInstall}</code>
+              </pre>
+            </div>
           </div>
           <div className="hero-visual">
-            <HeroGlobe />
+            <HeroFilm />
           </div>
         </section>
 

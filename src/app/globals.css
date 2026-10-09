@@ -1188,10 +1188,11 @@ html.dark .login-steps span.on {
   padding-bottom: 6vh;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 980px) {
   .hero-stage {
-    grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
-    gap: 3rem;
+    grid-template-columns: minmax(0, 0.9fr) minmax(340px, 1.1fr);
+    gap: 3.25rem;
+    align-items: center;
   }
 }
 
@@ -1287,14 +1288,102 @@ html.dark .login-steps span.on {
 
 .hero-visual {
   position: relative;
-  width: min(420px, 86vw);
+  width: min(100%, 720px);
   margin-inline: auto;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 980px) {
   .hero-visual {
-    margin-inline: 0 0 0 auto;
+    width: 100%;
+    margin-inline: 0;
   }
+}
+
+.hero-film {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #07090b;
+  box-shadow: var(--shadow);
+}
+
+.hero-film-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid rgba(238, 242, 244, 0.08);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8d9aa2;
+}
+
+.hero-film-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #07090b;
+  object-fit: cover;
+}
+
+.hero-cli {
+  max-width: 34rem;
+  margin-top: 1.35rem;
+  padding: 0.75rem 0.8rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.hero-cli-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.hero-cli-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hero-cli-head a {
+  letter-spacing: -0.01em;
+  text-transform: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.hero-cli-head a:hover {
+  color: var(--foreground);
+}
+
+.hero-cli-cmd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  white-space: pre-wrap;
+}
+
+.hero-cli-copy {
+  height: 2rem;
+  flex-shrink: 0;
+  padding: 0 0.7rem;
+  font-size: 0.75rem;
 }
 
 .hero-globe-svg {

@@ -8,6 +8,7 @@ import { HeroFilm } from "@/components/app/HeroFilm";
 import { HeroGlobe } from "@/components/app/HeroGlobe";
 import { HeroType } from "@/components/app/HeroType";
 import { PlatformInsights } from "@/components/app/PlatformInsights";
+import { SiteFooter } from "@/components/app/SiteFooter";
 import { getPlatformMetrics } from "@/domain/platformMetrics";
 
 const cliInstall = `npm run build --prefix cli
@@ -115,7 +116,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <div className="shell pb-24 md:pb-32">
+        <div className="shell pb-10">
           <section className="feature-row mt-2">
             {features.map((feature) => (
               <div key={feature.index} className="feature-item">
@@ -131,6 +132,7 @@ export default async function HomePage() {
           </section>
         </div>
       </main>
+      <SiteFooter />
     </PageAtmosphere>
   );
 }

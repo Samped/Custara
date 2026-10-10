@@ -2182,6 +2182,66 @@ a.net-proof-kicker:hover {
   color: var(--muted);
 }
 
+.site-footer {
+  margin-top: 3rem;
+  border-top: 1px solid var(--line);
+  padding: 1.35rem 0 calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+.site-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.site-footer-brand {
+  margin: 0;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+
+.site-footer-note {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.site-footer-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+.site-footer-nav a {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.site-footer-nav a:hover {
+  color: var(--foreground);
+}
+
+.site-footer-x {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--foreground);
+}
+
+.site-footer-x:hover {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 
 @media (max-width: 860px) {
   .docs-shell {

@@ -1190,6 +1190,135 @@ html.dark .login-steps span.on {
   font-size: 0.72rem;
 }
 
+.upload-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: color-mix(in oklab, #07090b 58%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.upload-modal {
+  width: min(28rem, 100%);
+  padding: 1.15rem 1.15rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  outline: none;
+}
+
+.upload-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.upload-modal-title {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.upload-modal-sub {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.upload-modal-close {
+  flex: 0 0 auto;
+  height: 2rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.upload-modal-close:hover {
+  color: var(--foreground);
+  background: var(--accent-soft);
+}
+
+.upload-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 1.55rem 1.1rem 1.2rem;
+  text-align: center;
+  border: 1.5px dashed color-mix(in oklab, var(--foreground) 16%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--foreground) 2.5%, var(--surface));
+}
+
+.upload-drop.is-over,
+.upload-drop.has-file {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+  background: var(--accent-soft);
+}
+
+.upload-drop-mark {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-bottom: 0.2rem;
+  border-radius: 999px;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+}
+
+.upload-drop-title {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-drop-meta {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.upload-modal-error {
+  margin: 0.75rem 0 0;
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+
+.upload-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.upload-modal-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .dash-chart svg {
   display: block;
   overflow: visible;
@@ -2053,6 +2182,7 @@ a.net-proof-kicker:hover {
   color: var(--muted);
 }
 
+
 @media (max-width: 860px) {
   .docs-shell {
     grid-template-columns: 1fr;
@@ -2275,6 +2405,25 @@ a.net-proof-kicker:hover {
     max-width: 100%;
   }
 
+  .upload-modal-root {
+    padding: 0.85rem;
+    align-items: end;
+  }
+
+  .upload-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .upload-modal .btn,
+  .upload-modal-close {
+    min-height: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .upload-modal-actions .btn {
+    width: 100%;
+  }
+
   .dash-panel-flush,
   .card.overflow-hidden {
     overflow-x: auto;
@@ -2310,5 +2459,6 @@ a.net-proof-kicker:hover {
   .app-shell pre {
     max-width: 100%;
   }
+
 }
 

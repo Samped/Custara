@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { ThemeToggle } from "@/components/app/ThemeProvider";
 import { PageAtmosphere } from "@/components/app/GridAtmosphere";
-import { DOC_PAGES, docHref, type DocPage } from "@/lib/docs";
+import { DOC_PAGES, docHref, docNeighbors, type DocPage } from "@/lib/docs";
 import { renderMarkdown } from "./renderMarkdown";
 
 export function DocsFrame({
@@ -60,8 +60,33 @@ export function DocsFrame({
             </div>
           ))}
         </aside>
-        <article className="docs-prose">{renderMarkdown(source)}</article>
+        <div className="docs-content">
+          <article className="docs-prose">{renderMarkdown(source)}</article>
+          <DocsPager page={page} />
+        </div>
       </main>
     </PageAtmosphere>
+  );
+}
+
+function DocsPager({ page }: { page: DocPage }) {
+  const { previous, next } = docNeighbors(page.slug);
+  if (!previous && !next) return null;
+
+  return (
+    <nav className="docs-pager" aria-label="More documentation">
+      {previous ? (
+        <Link href={docHref(previous.slug)} className="docs-pager-link is-prev">
+          <span>Previous</span>
+          <strong>{previous.title}</strong>
+        </Link>
+      ) : null}
+      {next ? (
+        <Link href={docHref(next.slug)} className="docs-pager-link is-next">
+          <span>Next</span>
+          <strong>{next.title}</strong>
+        </Link>
+      ) : null}
+    </nav>
   );
 }

@@ -19,9 +19,9 @@ export default async function NetworkLedgerPage() {
   return (
     <PageAtmosphere>
       <header className="app-header">
-        <div className="shell flex h-14 items-center justify-between">
+        <div className="shell site-header-bar">
           <BrandLogo href="/" size={36} wordmarkClassName="text-[1.05rem]" />
-          <div className="flex items-center gap-2.5">
+          <div className="site-header-actions">
             <Link href="/docs" className="btn btn-secondary">
               Docs
             </Link>

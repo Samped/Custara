@@ -35,6 +35,15 @@ export function findDoc(slug: string) {
   return DOC_PAGES.find((page) => page.slug === slug) || null;
 }
 
+export function docNeighbors(slug: string) {
+  const index = DOC_PAGES.findIndex((page) => page.slug === slug);
+  if (index < 0) return { previous: null, next: null };
+  return {
+    previous: index > 0 ? DOC_PAGES[index - 1] : null,
+    next: index < DOC_PAGES.length - 1 ? DOC_PAGES[index + 1] : null,
+  };
+}
+
 export async function readDocSource(file: string) {
   const full = path.join(process.cwd(), "docs", file);
   return readFile(full, "utf8");

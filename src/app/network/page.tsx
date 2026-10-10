@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { ThemeToggle } from "@/components/app/ThemeProvider";
 import { PageAtmosphere } from "@/components/app/GridAtmosphere";
+import { SiteFooter } from "@/components/app/SiteFooter";
 import { getPublicNetworkLedger, NETWORK_LEDGER_PREVIEW } from "@/domain/networkLedger";
 import { formatDate, formatMoney, paymentStatusLabel, shortHash } from "@/lib/format";
 
@@ -117,6 +118,7 @@ export default async function NetworkLedgerPage({
           </Link>
         </div>
       </main>
+      <SiteFooter />
     </PageAtmosphere>
   );
 }

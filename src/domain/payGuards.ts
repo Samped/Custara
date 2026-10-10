@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { loadPolicyRules } from "@/domain/policy";
 import { assertSpendLimits } from "@/domain/arc/allowlist";
+import { getPayingAgentWallet } from "@/domain/arc/wallets";
 import { screenDestination, screenPayAddress } from "@/domain/screening";
 
 /**
@@ -64,13 +65,7 @@ export async function assertPayTimeGuards(input: {
     });
     await assertSpendLimits(input.organizationId, input.amount);
 
-    const agent = await prisma.orgWallet.findFirst({
-      where: {
-        organizationId: input.organizationId,
-        role: "agent",
-        status: "active",
-      },
-    });
+    const agent = await getPayingAgentWallet(input.organizationId);
     if (!agent) throw new Error("Pay blocked: agent wallet not provisioned");
     if (agent.balanceUsdc != null && agent.balanceUsdc < input.amount) {
       throw new Error(

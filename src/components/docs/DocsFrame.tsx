@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { ThemeToggle } from "@/components/app/ThemeProvider";
 import { PageAtmosphere } from "@/components/app/GridAtmosphere";
+import { SiteFooter } from "@/components/app/SiteFooter";
 import { DOC_PAGES, docHref, docNeighbors, type DocPage } from "@/lib/docs";
 import { renderMarkdown } from "./renderMarkdown";
 
@@ -65,6 +66,7 @@ export function DocsFrame({
           <DocsPager page={page} />
         </div>
       </main>
+      <SiteFooter />
     </PageAtmosphere>
   );
 }

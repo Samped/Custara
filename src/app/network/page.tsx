@@ -3,18 +3,26 @@ import { getSessionUser } from "@/lib/auth";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { ThemeToggle } from "@/components/app/ThemeProvider";
 import { PageAtmosphere } from "@/components/app/GridAtmosphere";
-import { getPublicNetworkLedger } from "@/domain/networkLedger";
+import { getPublicNetworkLedger, NETWORK_LEDGER_PREVIEW } from "@/domain/networkLedger";
 import { formatDate, formatMoney, paymentStatusLabel, shortHash } from "@/lib/format";
 
-export default async function NetworkLedgerPage() {
-  const [user, rows] = await Promise.all([
+export default async function NetworkLedgerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ all?: string }>;
+}) {
+  const params = await searchParams;
+  const showAll = params.all === "1";
+  const [user, ledger] = await Promise.all([
     getSessionUser(),
-    getPublicNetworkLedger().catch((err) => {
+    getPublicNetworkLedger({ all: showAll }).catch((err) => {
       console.error("[network-ledger]", err);
-      return [];
+      return { rows: [], total: 0 };
     }),
   ]);
+  const { rows, total } = ledger;
   const onChain = rows.filter((row) => row.onChain).length;
+  const more = total - rows.length;
 
   return (
     <PageAtmosphere>
@@ -47,6 +55,7 @@ export default async function NetworkLedgerPage() {
         <p className="mt-4 max-w-[34rem] text-[0.95rem] leading-relaxed text-muted">
           Each row is a payment recorded in Custara. On-chain settlements open on Arcscan so you can
           check the transaction yourself. {onChain} of {rows.length} listed here have a public hash.
+          {more > 0 ? ` Showing the latest ${rows.length} of ${total.toLocaleString()}.` : null}
         </p>
 
         <div className="mt-10 overflow-x-auto border-t border-[var(--line)]">
@@ -93,11 +102,20 @@ export default async function NetworkLedgerPage() {
           </table>
         </div>
 
-        <p className="mt-6">
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          {more > 0 ? (
+            <Link href="/network?all=1" className="btn btn-secondary">
+              Show all
+            </Link>
+          ) : showAll && total > NETWORK_LEDGER_PREVIEW ? (
+            <Link href="/network" className="btn btn-secondary">
+              Show latest {NETWORK_LEDGER_PREVIEW}
+            </Link>
+          ) : null}
           <Link href="/" className="text-[0.82rem] text-muted hover:text-foreground">
             Back to Custara
           </Link>
-        </p>
+        </div>
       </main>
     </PageAtmosphere>
   );

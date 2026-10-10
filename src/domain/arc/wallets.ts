@@ -15,15 +15,31 @@ function normalizeAddress(address: string) {
   return a;
 }
 
+/** The agent that pays: newest active Circle wallet, otherwise the newest agent. */
+export async function getPayingAgentWallet(organizationId: string) {
+  const agents = await prisma.orgWallet.findMany({
+    where: { organizationId, role: "agent", status: { in: ["active", "pending"] } },
+    orderBy: { createdAt: "desc" },
+  });
+  return (
+    agents.find(
+      (wallet) =>
+        wallet.status === "active" &&
+        wallet.provider === "circle" &&
+        Boolean(wallet.circleWalletId) &&
+        !wallet.circleWalletId!.startsWith("sbx_"),
+    ) ||
+    agents[0] ||
+    null
+  );
+}
+
 export async function ensureAgentWallet(input: {
   organizationId: string;
   actorType: "user" | "system" | "api_key";
   actorId?: string;
 }) {
-  const existing = await prisma.orgWallet.findFirst({
-    where: { organizationId: input.organizationId, role: "agent", status: { in: ["active", "pending"] } },
-    orderBy: { createdAt: "asc" },
-  });
+  const existing = await getPayingAgentWallet(input.organizationId);
   if (existing) return existing;
 
   const created = await createAgentWallet({ organizationId: input.organizationId });

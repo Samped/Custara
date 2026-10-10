@@ -2520,5 +2520,20 @@ a.net-proof-kicker:hover {
     max-width: 100%;
   }
 
+  .site-footer {
+    margin-top: 2rem;
+  }
+
+  .site-footer-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .site-footer-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
 }
 

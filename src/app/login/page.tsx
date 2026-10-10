@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { PageAtmosphere } from "@/components/app/GridAtmosphere";
+import { SiteFooter } from "@/components/app/SiteFooter";
 import { EmailOtpGate } from "@/components/app/EmailOtpGate";
 import { isOidcConfigured } from "@/lib/oidc";
 import { userNeedsMfaChallenge, verifyUserMfa } from "@/lib/mfa";
@@ -58,9 +59,10 @@ export default async function LoginPage({
   }
 
   return (
-    <PageAtmosphere className="app-shell flex min-h-screen items-center justify-center px-4">
-      <div className="login-panel">
-        <BrandLogo href={null} size={30} wordmarkClassName="text-[0.95rem]" />
+    <PageAtmosphere className="app-shell flex min-h-screen flex-col">
+      <div className="flex flex-1 items-center justify-center px-4 py-10">
+        <div className="login-panel">
+          <BrandLogo href={null} size={30} wordmarkClassName="text-[0.95rem]" />
         <h1 className="mt-6 page-title">{mfaStep ? "MFA verification" : "Sign in"}</h1>
         <p className="mt-2 page-subtitle">
           {mfaStep ? "Enter your authenticator code." : "Work email · one-time code"}
@@ -91,7 +93,9 @@ export default async function LoginPage({
         ) : (
           <EmailOtpGate circleReady={circleReady} circleAppId={circleAppId} />
         )}
+        </div>
       </div>
+      <SiteFooter />
     </PageAtmosphere>
   );
 }

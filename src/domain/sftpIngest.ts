@@ -8,7 +8,12 @@ import { ingestCsvRows } from "@/domain/csvIngest";
 import { ingestFirsInvoice } from "@/domain/einvoice/firs";
 
 const TYPE = "sftp_drop";
-const ROOT = path.join(process.cwd(), "storage", "sftp-drops");
+
+/** Vercel can only write under /tmp. A mkdir under the app directory crashes the page. */
+function dropRoot() {
+  if (process.env.VERCEL) return path.join("/tmp", "custara-sftp-drops");
+  return path.join(process.cwd(), "storage", "sftp-drops");
+}
 
 export type SftpConfig = {
   /** Local enterprise drop mirror (always available). */
@@ -22,16 +27,32 @@ export type SftpConfig = {
   remotePath?: string;
 };
 
+async function ensureDropDirs(incoming: string, processed: string, failed: string) {
+  try {
+    await mkdir(incoming, { recursive: true });
+    await mkdir(processed, { recursive: true });
+    await mkdir(failed, { recursive: true });
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === "EROFS" || code === "EACCES" || code === "EPERM") return;
+    throw e;
+  }
+}
+
 export async function ensureSftpConnector(organizationId: string) {
-  const base = path.join(ROOT, organizationId);
+  const base = path.join(dropRoot(), organizationId);
   const incoming = path.join(base, "incoming");
   const processed = path.join(base, "processed");
   const failed = path.join(base, "failed");
-  await mkdir(incoming, { recursive: true });
-  await mkdir(processed, { recursive: true });
-  await mkdir(failed, { recursive: true });
+  await ensureDropDirs(incoming, processed, failed);
 
-  return prisma.integrationConnector.upsert({
+  const localPaths = {
+    localIncoming: incoming,
+    localProcessed: processed,
+    localFailed: failed,
+  };
+
+  const row = await prisma.integrationConnector.upsert({
     where: { organizationId_type: { organizationId, type: TYPE } },
     create: {
       organizationId,
@@ -39,9 +60,7 @@ export async function ensureSftpConnector(organizationId: string) {
       name: "SFTP / drop folder",
       status: "connected",
       configJson: JSON.stringify({
-        localIncoming: incoming,
-        localProcessed: processed,
-        localFailed: failed,
+        ...localPaths,
         host: process.env.SFTP_HOST || undefined,
         port: Number(process.env.SFTP_PORT || 22),
         username: process.env.SFTP_USER || undefined,
@@ -52,6 +71,25 @@ export async function ensureSftpConnector(organizationId: string) {
         : "{}",
     },
     update: {},
+  });
+
+  let cfg: Partial<SftpConfig> = {};
+  try {
+    cfg = JSON.parse(row.configJson || "{}") as SftpConfig;
+  } catch {
+    cfg = {};
+  }
+  if (
+    cfg.localIncoming === incoming &&
+    cfg.localProcessed === processed &&
+    cfg.localFailed === failed
+  ) {
+    return row;
+  }
+
+  return prisma.integrationConnector.update({
+    where: { id: row.id },
+    data: { configJson: JSON.stringify({ ...cfg, ...localPaths }) },
   });
 }
 

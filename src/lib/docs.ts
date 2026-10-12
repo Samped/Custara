@@ -1,11 +1,15 @@
 import { readFile } from "fs/promises";
 import path from "path";
 
+export const DOC_SECTIONS = ["Handbook", "Work", "Money", "Admin", "Reference"] as const;
+
+export type DocSection = (typeof DOC_SECTIONS)[number];
+
 export type DocPage = {
   slug: string;
   file: string;
   title: string;
-  section: "Handbook" | "Reference";
+  section: DocSection;
 };
 
 export const DOC_PAGES: DocPage[] = [
@@ -21,6 +25,16 @@ export const DOC_PAGES: DocPage[] = [
   { slug: "connectors", file: "connectors.md", title: "Connectors", section: "Handbook" },
   { slug: "audit", file: "audit.md", title: "Audit", section: "Handbook" },
   { slug: "operations", file: "operations.md", title: "Operations", section: "Handbook" },
+  { slug: "home", file: "home.md", title: "Home", section: "Work" },
+  { slug: "inbox", file: "inbox.md", title: "Inbox", section: "Work" },
+  { slug: "approvals", file: "approvals.md", title: "Approvals", section: "Work" },
+  { slug: "vendors", file: "vendors.md", title: "Vendors", section: "Work" },
+  { slug: "pay", file: "pay.md", title: "Pay", section: "Money" },
+  { slug: "cash", file: "cash.md", title: "Cash", section: "Money" },
+  { slug: "controls", file: "controls.md", title: "Controls", section: "Admin" },
+  { slug: "roles", file: "roles.md", title: "Roles", section: "Admin" },
+  { slug: "app-security", file: "app-security.md", title: "Security", section: "Admin" },
+  { slug: "settings", file: "settings.md", title: "Settings", section: "Admin" },
   { slug: "agent-payments", file: "agent-payments.md", title: "Agent payments", section: "Reference" },
   { slug: "erp-adapters", file: "erp-adapters.md", title: "ERP adapters", section: "Reference" },
   { slug: "qa-runbook", file: "qa-runbook.md", title: "Release verification", section: "Reference" },

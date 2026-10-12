@@ -9,7 +9,7 @@ This handbook is the operator and integrator reference.
 | Reader | Start here |
 |--------|------------|
 | Operator standing up a workspace | [Getting started](getting-started.md) |
-| Finance, approver, or payer | [Console](console.md), [Invoice lifecycle](invoice-lifecycle.md) |
+| Finance, approver, or payer | [Home](home.md), [Inbox](inbox.md), [Approvals](approvals.md), [Console](console.md) |
 | Treasurer or payer moving USDC | [Payments and treasury](payments-and-treasury.md) |
 | Security or compliance | [Security](security.md), [Audit](audit.md) |
 | Engineer integrating an ERP or service | [Partner API](partner-api.md), [Webhooks](webhooks.md), [CLI](cli.md) |
@@ -19,15 +19,16 @@ This handbook is the operator and integrator reference.
 
 1. [Getting started](getting-started.md) — install, database, worker, first sign-in
 2. [Invoice lifecycle](invoice-lifecycle.md) — statuses, risk, policy, timing
-3. [Console](console.md) — workspace screens
-4. [Payments and treasury](payments-and-treasury.md) — Arc USDC, allowlist, autopay, balances
-5. [Security](security.md) — sessions, MFA threshold, API keys, encryption
-6. [Partner API](partner-api.md) — authentication, scopes, endpoints, idempotency
-7. [CLI](cli.md) — `custara` command for the same operations
-8. [Webhooks](webhooks.md) — events, signing, delivery
-9. [Connectors](connectors.md) — email, SFTP, ERP, accounting, WhatsApp
-10. [Audit](audit.md) — hash chain, export, verification
-11. [Operations](operations.md) — processes, health, production checklist
+3. [Console](console.md) — workspace map
+4. Work, Money, and Admin in the docs sidebar — each screen in the **Go to** menu
+5. [Payments and treasury](payments-and-treasury.md) — Arc USDC, allowlist, autopay, balances
+6. [Security](security.md) — sessions, MFA threshold, API keys, encryption
+7. [Partner API](partner-api.md) — authentication, scopes, endpoints, idempotency
+8. [CLI](cli.md) — `custara` command for the same operations
+9. [Webhooks](webhooks.md) — events, signing, delivery
+10. [Connectors](connectors.md) — email, SFTP, ERP, accounting, WhatsApp
+11. [Audit](audit.md) — hash chain, export, verification
+12. [Operations](operations.md) — processes, health, production checklist
 
 Reference:
 

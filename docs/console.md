@@ -2,6 +2,12 @@
 
 The signed-in workspace lives under `/app`. The public site is `/` and the network ledger is `/network`.
 
+The **Go to** menu is documented page by page:
+
+- Work — [Home](home.md), [Inbox](inbox.md), [Approvals](approvals.md), [Vendors](vendors.md)
+- Money — [Pay](pay.md), [Cash](cash.md)
+- Admin — [Controls](controls.md), [Roles](roles.md), [Security](app-security.md), [Settings](settings.md)
+
 | Path | Who | Purpose |
 |------|-----|---------|
 | `/app` | Anyone who can read the inbox | Home: approvals waiting, pay queue, open invoices, payment-wallet balance, recent bills |

@@ -3,7 +3,7 @@ import { BrandLogo } from "@/components/app/BrandLogo";
 import { ThemeToggle } from "@/components/app/ThemeProvider";
 import { PageAtmosphere } from "@/components/app/GridAtmosphere";
 import { SiteFooter } from "@/components/app/SiteFooter";
-import { DOC_PAGES, docHref, docNeighbors, type DocPage } from "@/lib/docs";
+import { DOC_PAGES, DOC_SECTIONS, docHref, docNeighbors, type DocPage } from "@/lib/docs";
 import { renderMarkdown } from "./renderMarkdown";
 
 export function DocsFrame({
@@ -15,8 +15,6 @@ export function DocsFrame({
   source: string;
   signedIn: boolean;
 }) {
-  const sections = ["Handbook", "Reference"] as const;
-
   return (
     <PageAtmosphere>
       <header className="app-header">
@@ -42,7 +40,7 @@ export function DocsFrame({
 
       <main className="shell docs-shell">
         <aside className="docs-nav">
-          {sections.map((section) => (
+          {DOC_SECTIONS.map((section) => (
             <div key={section}>
               <p className="docs-nav-label">{section}</p>
               <ul>

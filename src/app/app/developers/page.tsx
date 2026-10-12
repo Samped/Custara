@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/app/AppShell";
+import { CopyButton } from "@/components/app/CopyButton";
 import { replayWebhookDelivery } from "@/lib/webhooks";
 import {
   PARTNER_API_SCOPES,
@@ -16,6 +17,17 @@ import {
 } from "@/domain/partnerApi";
 import { formatDate } from "@/lib/format";
 import { getArcChain, getArcExecutionMode, getUsdcTokenAddress } from "@/domain/arc/config";
+
+function CodeSample({ value }: { value: string }) {
+  return (
+    <div className="code-sample">
+      <div className="code-sample-bar">
+        <CopyButton value={value} label="Copy" className="btn code-sample-copy" />
+      </div>
+      <pre>{value}</pre>
+    </div>
+  );
+}
 
 const ONCE_COOKIE = "custara_new_api_key";
 const WEBHOOK_SECRET_COOKIE = "custara_new_webhook_secret";
@@ -203,7 +215,7 @@ export default async function DevelopersPage({
         <div className="card mb-5 border-[var(--accent)] p-5">
           <h2 className="app-h">API key</h2>
           <p className="app-sub">Shown once. Store securely; only a hash is retained.</p>
-          <pre className="mt-3 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{revealedKey}</pre>
+          <CodeSample value={revealedKey} />
         </div>
       ) : null}
 
@@ -211,7 +223,7 @@ export default async function DevelopersPage({
         <div className="card mb-5 border-[var(--accent)] p-5">
           <h2 className="app-h">Webhook secret</h2>
           <p className="app-sub">HMAC-SHA256 via `X-Custara-Signature`.</p>
-          <pre className="mt-3 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{revealedWebhookSecret}</pre>
+          <CodeSample value={revealedWebhookSecret} />
         </div>
       ) : null}
 
@@ -380,53 +392,57 @@ export default async function DevelopersPage({
           Allow the vendor wallet, create the bill, approve it, then pay. Use the same vendor name and the same
           0x address in steps 1 and 2. Replace 0xVENDOR_WALLET before you send either call.
         </p>
-        <pre className="mt-4 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{`export CUSTARA_API_KEY="cst_live_…"
-export CUSTARA_BASE="${baseUrl}"`}</pre>
+        <CodeSample
+          value={`export CUSTARA_API_KEY="cst_live_…"
+export CUSTARA_BASE="${baseUrl}"`}
+        />
 
         <h3 className="mt-5 text-sm font-semibold">1. Allow a wallet address</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
           Needs <code>invoices:write</code>. This creates the vendor and puts the address on the allowlist.
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlAllow}</pre>
+        <CodeSample value={curlAllow} />
 
         <h3 className="mt-5 text-sm font-semibold">2. Create and analyze an invoice</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
           Save <code>id</code> from the response. A new bill needs a new invoice number and a new Idempotency-Key.
           If <code>status</code> is already <code>approved</code>, skip step 3.
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlIngest}</pre>
+        <CodeSample value={curlIngest} />
 
         <h3 className="mt-5 text-sm font-semibold">3. Approve the invoice</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
           Needs <code>approvals:write</code>. Read <code>policy_result.latest_approval.id</code>, then decide.
           When <code>required_count</code> is 2, send the decide call a second time.
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlAnalysis}</pre>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlApprove}</pre>
+        <CodeSample value={curlAnalysis} />
+        <CodeSample value={curlApprove} />
 
         <h3 className="mt-5 text-sm font-semibold">4. List invoices</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
           The pay call uses <code>id</code> from <code>data</code>, not the invoice number.
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlList}</pre>
+        <CodeSample value={curlList} />
 
         <h3 className="mt-5 text-sm font-semibold">5. Pay the invoice</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
           Needs <code>payments:initiate</code>. <code>mode</code> is <code>live</code> when this workspace settles on
           Arc. If the response asks for <code>X-Custara-Step-Up</code>, add that header with your step-up secret.
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlPay}</pre>
+        <CodeSample value={curlPay} />
 
         <h3 className="mt-5 text-sm font-semibold">6. Bulk CSV ingest</h3>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlBulk}</pre>
+        <CodeSample value={curlBulk} />
 
         <h3 className="mt-5 text-sm font-semibold">7. Verify webhook signatures</h3>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{`# Node
+        <CodeSample
+          value={`# Node
 const crypto = require("crypto");
 const expected = crypto.createHmac("sha256", process.env.CUSTARA_WEBHOOK_SECRET)
   .update(rawBody)
   .digest("hex");
-// compare to header X-Custara-Signature`}</pre>
+// compare to header X-Custara-Signature`}
+        />
 
         <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
           <div className="rounded-xl border border-[var(--line)] p-4">

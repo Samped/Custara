@@ -1576,6 +1576,43 @@ html.dark .login-steps span.on {
   font-size: 0.75rem;
 }
 
+.code-sample {
+  margin-top: 0.5rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: #0f1c1f;
+}
+
+.code-sample-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.55rem 0.55rem 0;
+}
+
+.code-sample-copy {
+  height: 1.75rem;
+  padding: 0 0.65rem;
+  border-color: rgba(240, 253, 250, 0.22);
+  background: rgba(240, 253, 250, 0.08);
+  color: #f0fdfa;
+  font-size: 0.72rem;
+}
+
+.code-sample-copy:hover {
+  background: rgba(240, 253, 250, 0.16);
+  border-color: rgba(240, 253, 250, 0.4);
+  color: #f0fdfa;
+}
+
+.code-sample pre {
+  margin: 0;
+  overflow-x: auto;
+  padding: 0.65rem 1rem 1rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #f0fdfa;
+}
+
 .hero-globe-svg {
   display: block;
   width: 100%;

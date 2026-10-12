@@ -143,6 +143,15 @@ export default async function DevelopersPage({
           ? "Simulated"
           : "Blocked until Payment mode is Arc testnet";
 
+  const curlAllow = `curl -s ${baseUrl}/api/v1/vendors \\
+  -H "Authorization: Bearer $CUSTARA_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "Acme Supplies",
+    "arc_address": "0xVENDOR_WALLET",
+    "currency": "USDC"
+  }'`;
+
   const curlIngest = `curl -s ${baseUrl}/api/v1/invoices \\
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -157,16 +166,25 @@ export default async function DevelopersPage({
       "total_amount": 25,
       "currency": "USDC",
       "due_date": "2026-10-20",
-      "arc_address": "0x0000000000000000000000000000000000000000",
+      "po_number": "PO-1001",
+      "arc_address": "0xVENDOR_WALLET",
       "confidence": 0.95
     }
   }'`;
+
+  const curlAnalysis = `curl -s ${baseUrl}/api/v1/invoices/INVOICE_ID/analysis \\
+  -H "Authorization: Bearer $CUSTARA_API_KEY"`;
+
+  const curlApprove = `curl -s ${baseUrl}/api/v1/approvals/APPROVAL_ID/decide \\
+  -H "Authorization: Bearer $CUSTARA_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "decision": "approved", "note": "ok" }'`;
 
   const curlPay = `curl -s ${baseUrl}/api/v1/payment-intents \\
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: pay-$(date +%s)" \\
-  -d '{ "invoice_id": "INV_ID", "rail": "arc_usdc" }'`;
+  -d '{ "invoice_id": "INVOICE_ID", "rail": "arc_usdc" }'`;
 
   const curlList = `curl -s "${baseUrl}/api/v1/invoices?limit=20" \\
   -H "Authorization: Bearer $CUSTARA_API_KEY"`;
@@ -358,22 +376,51 @@ export default async function DevelopersPage({
 
       <section className="card mb-5 p-5">
         <h2 className="app-h">Quickstart</h2>
+        <p className="app-sub mt-2">
+          Allow the vendor wallet, create the bill, approve it, then pay. Use the same vendor name and the same
+          0x address in steps 1 and 2. Replace 0xVENDOR_WALLET before you send either call.
+        </p>
         <pre className="mt-4 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{`export CUSTARA_API_KEY="cst_live_…"
 export CUSTARA_BASE="${baseUrl}"`}</pre>
 
-        <h3 className="mt-5 text-sm font-semibold">1. List invoices</h3>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlList}</pre>
+        <h3 className="mt-5 text-sm font-semibold">1. Allow a wallet address</h3>
+        <p className="mt-1 text-[0.78rem] text-muted">
+          Needs <code>invoices:write</code>. This creates the vendor and puts the address on the allowlist.
+        </p>
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlAllow}</pre>
 
-        <h3 className="mt-5 text-sm font-semibold">2. Ingest + analyze an invoice</h3>
+        <h3 className="mt-5 text-sm font-semibold">2. Create and analyze an invoice</h3>
+        <p className="mt-1 text-[0.78rem] text-muted">
+          Save <code>id</code> from the response. A new bill needs a new invoice number and a new Idempotency-Key.
+          If <code>status</code> is already <code>approved</code>, skip step 3.
+        </p>
         <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlIngest}</pre>
 
-        <h3 className="mt-5 text-sm font-semibold">2b. Bulk CSV ingest</h3>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlBulk}</pre>
+        <h3 className="mt-5 text-sm font-semibold">3. Approve the invoice</h3>
+        <p className="mt-1 text-[0.78rem] text-muted">
+          Needs <code>approvals:write</code>. Read <code>policy_result.latest_approval.id</code>, then decide.
+          When <code>required_count</code> is 2, send the decide call a second time.
+        </p>
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlAnalysis}</pre>
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlApprove}</pre>
 
-        <h3 className="mt-5 text-sm font-semibold">3. Create a payment intent</h3>
+        <h3 className="mt-5 text-sm font-semibold">4. List invoices</h3>
+        <p className="mt-1 text-[0.78rem] text-muted">
+          The pay call uses <code>id</code> from <code>data</code>, not the invoice number.
+        </p>
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlList}</pre>
+
+        <h3 className="mt-5 text-sm font-semibold">5. Pay the invoice</h3>
+        <p className="mt-1 text-[0.78rem] text-muted">
+          Needs <code>payments:initiate</code>. <code>mode</code> is <code>live</code> when this workspace settles on
+          Arc. If the response asks for <code>X-Custara-Step-Up</code>, add that header with your step-up secret.
+        </p>
         <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlPay}</pre>
 
-        <h3 className="mt-5 text-sm font-semibold">4. Verify webhook signatures</h3>
+        <h3 className="mt-5 text-sm font-semibold">6. Bulk CSV ingest</h3>
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{curlBulk}</pre>
+
+        <h3 className="mt-5 text-sm font-semibold">7. Verify webhook signatures</h3>
         <pre className="mt-2 overflow-x-auto rounded-xl bg-[#0f1c1f] p-4 text-xs text-teal-50">{`# Node
 const crypto = require("crypto");
 const expected = crypto.createHmac("sha256", process.env.CUSTARA_WEBHOOK_SECRET)

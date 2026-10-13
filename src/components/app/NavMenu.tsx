@@ -5,16 +5,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 const nav = [
-  { href: "/app", label: "Home", group: "Work", docs: "/docs/home" },
-  { href: "/app/inbox", label: "Inbox", group: "Work", docs: "/docs/inbox" },
-  { href: "/app/approvals", label: "Approvals", group: "Work", docs: "/docs/approvals" },
-  { href: "/app/vendors", label: "Vendors", group: "Work", docs: "/docs/vendors" },
-  { href: "/app/payments", label: "Pay", group: "Money", docs: "/docs/pay" },
-  { href: "/app/cash", label: "Cash", group: "Money", docs: "/docs/cash" },
-  { href: "/app/policies", label: "Controls", group: "Admin", docs: "/docs/controls" },
-  { href: "/app/roles", label: "Roles", group: "Admin", docs: "/docs/roles" },
-  { href: "/app/security", label: "Security", group: "Admin", docs: "/docs/app-security" },
-  { href: "/app/settings", label: "Settings", group: "Admin", docs: "/docs/settings" },
+  { href: "/app", label: "Home", group: "Work" },
+  { href: "/app/inbox", label: "Inbox", group: "Work" },
+  { href: "/app/approvals", label: "Approvals", group: "Work" },
+  { href: "/app/vendors", label: "Vendors", group: "Work" },
+  { href: "/app/payments", label: "Pay", group: "Money" },
+  { href: "/app/cash", label: "Cash", group: "Money" },
+  { href: "/app/policies", label: "Controls", group: "Admin" },
+  { href: "/app/roles", label: "Roles", group: "Admin" },
+  { href: "/app/security", label: "Security", group: "Admin" },
+  { href: "/app/settings", label: "Settings", group: "Admin" },
 ];
 
 function currentLabel(pathname: string) {
@@ -87,21 +87,19 @@ export function NavMenu() {
                       ? pathname === "/app"
                       : pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
-                    <div key={item.href} className="nav-menu-row" data-active={active ? "true" : "false"}>
-                      <Link href={item.href} role="menuitem">
-                        {item.label}
-                      </Link>
-                      <span className="nav-menu-aside">
-                        {active ? <span className="nav-menu-current">Current</span> : null}
-                        <Link href={item.docs} className="nav-menu-docs" role="menuitem">
-                          Docs
-                        </Link>
-                      </span>
-                    </div>
+                    <Link key={item.href} href={item.href} role="menuitem" data-active={active ? "true" : "false"}>
+                      <span>{item.label}</span>
+                      {active ? <span className="nav-menu-current">Current</span> : null}
+                    </Link>
                   );
                 })}
             </div>
           ))}
+          <div className="nav-menu-docs">
+            <Link href="/docs" role="menuitem">
+              Docs
+            </Link>
+          </div>
         </div>
       ) : null}
     </div>

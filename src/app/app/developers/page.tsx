@@ -185,8 +185,10 @@ curl -s ${baseUrl}/api/v1/invoices \\
     }
   }'`;
 
-  const curlAnalysis = `curl -s ${baseUrl}/api/v1/invoices/$INVOICE_ID/analysis \\
-  -H "Authorization: Bearer $CUSTARA_API_KEY"`;
+  const curlAnalysis = `export APPROVAL_ID=$(curl -s ${baseUrl}/api/v1/invoices/$INVOICE_ID/analysis \\
+  -H "Authorization: Bearer $CUSTARA_API_KEY" \\
+  | python3 -c 'import json,sys; body=json.load(sys.stdin); approval=(body.get("policy_result") or {}).get("latest_approval") or {}; print(approval.get("id") or "")')
+echo "$APPROVAL_ID"`;
 
   const curlApprove = `curl -s ${baseUrl}/api/v1/approvals/$APPROVAL_ID/decide \\
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
@@ -414,9 +416,9 @@ export CUSTARA_BASE="${baseUrl}"`}
 
         <h3 className="mt-5 text-sm font-semibold">3. Approve the invoice</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
-          Export <code>INVOICE_ID</code> from step 2, then run the analysis call. It needs <code>approvals:write</code> for the decide call.
-          Export <code>APPROVAL_ID</code> from <code>policy_result.latest_approval.id</code>.
-          When <code>required_count</code> is 2, send the decide call a second time.
+          Export <code>INVOICE_ID</code> from step 2. The analysis command sets <code>APPROVAL_ID</code> from <code>policy_result.latest_approval.id</code>.
+          The decide call needs <code>approvals:write</code>. When <code>required_count</code> is 2, send it a second time.
+          If the echoed approval id is empty and <code>status</code> is <code>approved</code>, skip to pay.
         </p>
         <CodeSample value={curlAnalysis} />
         <CodeSample value={curlApprove} />

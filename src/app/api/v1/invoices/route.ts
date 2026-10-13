@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { AuthError, authenticateApiKey } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { ingestInvoice } from "@/domain/ingest";
+import { InvoiceConflictError, ingestInvoice } from "@/domain/ingest";
 import { runInvoicePipeline } from "@/domain/pipeline";
 import { assertRateLimit } from "@/lib/rateLimit";
 import { createRequestId } from "@/lib/audit";
@@ -118,7 +118,14 @@ function apiError(e: unknown) {
   if (e instanceof AuthError) {
     return NextResponse.json({ error: e.message }, { status: e.status });
   }
+  if (e instanceof InvoiceConflictError) {
+    return NextResponse.json(
+      { error: e.message, id: e.invoiceId, external_id: e.externalId },
+      { status: 409 },
+    );
+  }
   const status = typeof e === "object" && e && "status" in e ? Number((e as { status: number }).status) : 400;
   const message = e instanceof Error ? e.message : "Server error";
-  return NextResponse.json({ error: message }, { status: status || 400 });
+  const safe = message.includes("Invalid `prisma.") ? "Server error" : message;
+  return NextResponse.json({ error: safe }, { status: status || 400 });
 }

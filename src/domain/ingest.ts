@@ -8,6 +8,25 @@ export async function ensureStorage() {
   return;
 }
 
+export class InvoiceConflictError extends Error {
+  status = 409;
+  invoiceId: string;
+  externalId: string;
+
+  constructor(invoiceId: string, externalId: string) {
+    super(
+      `An invoice with external_id ${externalId} already exists. Use id ${invoiceId}, or send a new external_id.`,
+    );
+    this.name = "InvoiceConflictError";
+    this.invoiceId = invoiceId;
+    this.externalId = externalId;
+  }
+}
+
+function isUniqueConflict(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+}
+
 export async function ingestInvoice(input: {
   organizationId: string;
   actorType: "user" | "system" | "api_key";
@@ -25,16 +44,47 @@ export async function ingestInvoice(input: {
 }) {
   await ensureStorage();
 
-  const invoice = await prisma.invoice.create({
-    data: {
-      organizationId: input.organizationId,
-      externalId: input.externalId || null,
-      currency: input.currency || "NGN",
-      source: input.source,
-      status: "received",
-      requestId: input.requestId || null,
-    },
-  });
+  const externalId = input.externalId || null;
+  if (externalId) {
+    const existing = await prisma.invoice.findUnique({
+      where: {
+        organizationId_externalId: {
+          organizationId: input.organizationId,
+          externalId,
+        },
+      },
+      select: { id: true },
+    });
+    if (existing) throw new InvoiceConflictError(existing.id, externalId);
+  }
+
+  let invoice;
+  try {
+    invoice = await prisma.invoice.create({
+      data: {
+        organizationId: input.organizationId,
+        externalId,
+        currency: input.currency || "NGN",
+        source: input.source,
+        status: "received",
+        requestId: input.requestId || null,
+      },
+    });
+  } catch (error) {
+    if (externalId && isUniqueConflict(error)) {
+      const existing = await prisma.invoice.findUnique({
+        where: {
+          organizationId_externalId: {
+            organizationId: input.organizationId,
+            externalId,
+          },
+        },
+        select: { id: true },
+      });
+      if (existing) throw new InvoiceConflictError(existing.id, externalId);
+    }
+    throw error;
+  }
 
   if (input.bytes && input.filename) {
     const org = await prisma.organization.findUniqueOrThrow({

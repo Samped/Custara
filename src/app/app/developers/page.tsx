@@ -164,16 +164,17 @@ export default async function DevelopersPage({
     "currency": "USDC"
   }'`;
 
-  const curlIngest = `curl -s ${baseUrl}/api/v1/invoices \\
+  const curlIngest = `STAMP=$(date +%s)
+curl -s ${baseUrl}/api/v1/invoices \\
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: inv-$(date +%s)" \\
+  -H "Idempotency-Key: inv-$STAMP" \\
   -d '{
-    "external_id": "erp-1001",
+    "external_id": "erp-'"$STAMP"'",
     "sync": true,
     "currency": "USDC",
     "document": {
-      "invoice_number": "INV-1001",
+      "invoice_number": "INV-'"$STAMP"'",
       "vendor_name": "Acme Supplies",
       "total_amount": 25,
       "currency": "USDC",
@@ -405,7 +406,8 @@ export CUSTARA_BASE="${baseUrl}"`}
 
         <h3 className="mt-5 text-sm font-semibold">2. Create and analyze an invoice</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
-          Save <code>id</code> from the response. A new bill needs a new invoice number and a new Idempotency-Key.
+          Save <code>id</code> from the response. Each run uses a new <code>external_id</code> and invoice number from <code>STAMP</code>.
+          Sending an <code>external_id</code> that already exists returns <code>409</code> and that invoice's <code>id</code>.
           If <code>status</code> is already <code>approved</code>, skip step 3.
         </p>
         <CodeSample value={curlIngest} />

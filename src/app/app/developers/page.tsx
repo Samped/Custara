@@ -185,10 +185,10 @@ curl -s ${baseUrl}/api/v1/invoices \\
     }
   }'`;
 
-  const curlAnalysis = `curl -s ${baseUrl}/api/v1/invoices/INVOICE_ID/analysis \\
+  const curlAnalysis = `curl -s ${baseUrl}/api/v1/invoices/$INVOICE_ID/analysis \\
   -H "Authorization: Bearer $CUSTARA_API_KEY"`;
 
-  const curlApprove = `curl -s ${baseUrl}/api/v1/approvals/APPROVAL_ID/decide \\
+  const curlApprove = `curl -s ${baseUrl}/api/v1/approvals/$APPROVAL_ID/decide \\
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "decision": "approved", "note": "ok" }'`;
@@ -197,7 +197,7 @@ curl -s ${baseUrl}/api/v1/invoices \\
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: pay-$(date +%s)" \\
-  -d '{ "invoice_id": "INVOICE_ID", "rail": "arc_usdc" }'`;
+  -d '{ "invoice_id": "'"$INVOICE_ID"'", "rail": "arc_usdc" }'`;
 
   const curlList = `curl -s "${baseUrl}/api/v1/invoices?limit=20" \\
   -H "Authorization: Bearer $CUSTARA_API_KEY"`;
@@ -414,7 +414,8 @@ export CUSTARA_BASE="${baseUrl}"`}
 
         <h3 className="mt-5 text-sm font-semibold">3. Approve the invoice</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
-          Needs <code>approvals:write</code>. Read <code>policy_result.latest_approval.id</code>, then decide.
+          Export <code>INVOICE_ID</code> from step 2, then run the analysis call. It needs <code>approvals:write</code> for the decide call.
+          Export <code>APPROVAL_ID</code> from <code>policy_result.latest_approval.id</code>.
           When <code>required_count</code> is 2, send the decide call a second time.
         </p>
         <CodeSample value={curlAnalysis} />
@@ -428,7 +429,7 @@ export CUSTARA_BASE="${baseUrl}"`}
 
         <h3 className="mt-5 text-sm font-semibold">5. Pay the invoice</h3>
         <p className="mt-1 text-[0.78rem] text-muted">
-          Needs <code>payments:initiate</code>. <code>mode</code> is <code>live</code> when this workspace settles on
+          Needs <code>payments:initiate</code> and the same <code>INVOICE_ID</code>. <code>mode</code> is <code>live</code> when this workspace settles on
           Arc. If the response asks for <code>X-Custara-Step-Up</code>, add that header with your step-up secret.
         </p>
         <CodeSample value={curlPay} />

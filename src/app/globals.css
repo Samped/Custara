@@ -679,6 +679,34 @@ select.input {
   color: var(--muted);
 }
 
+.nav-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  border-radius: 7px;
+  padding-right: 0.2rem;
+}
+
+.nav-menu-row[data-active="true"] {
+  background: var(--accent-soft);
+}
+
+.nav-menu-aside {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.nav-menu-current {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
 .nav-menu a,
 .nav-menu button.menu-item {
   display: flex;
@@ -697,10 +725,32 @@ select.input {
   cursor: pointer;
 }
 
+.nav-menu-row > a {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-menu-row .nav-menu-docs {
+  width: auto;
+  flex: none;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
 .nav-menu a:hover,
 .nav-menu a[data-active="true"],
-.nav-menu button.menu-item:hover {
+.nav-menu button.menu-item:hover,
+.nav-menu-row:hover {
   background: var(--accent-soft);
+  color: var(--foreground);
+}
+
+.nav-menu-row .nav-menu-docs:hover {
   color: var(--foreground);
 }
 

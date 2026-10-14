@@ -1,9 +1,10 @@
+import { createRequire } from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { getObject } from "@/lib/storage";
 import { prisma } from "@/lib/db";
 import { extractionSchema, type Extraction } from "@/lib/types";
 import { encryptField, last4 } from "@/lib/crypto";
-// Static import so the live upload function ships the PDF reader with it.
-import "pdf-parse";
 
 function parseLooseJson(text: string): Record<string, unknown> | null {
   try {
@@ -464,6 +465,15 @@ export function textFromPdfLiterals(buf: Buffer): string {
   return lines.join("\n");
 }
 
+function pdfWorkerSrc(): string | undefined {
+  try {
+    const requireFromRoot = createRequire(path.join(process.cwd(), "package.json"));
+    return pathToFileURL(requireFromRoot.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")).href;
+  } catch {
+    return undefined;
+  }
+}
+
 async function extractPdfText(buf: Buffer): Promise<string> {
   let parsed = "";
   try {
@@ -471,8 +481,17 @@ async function extractPdfText(buf: Buffer): Promise<string> {
     bytes.set(buf);
     // Native import so Node loads the server build, not the browser build.
     const mod = await import(/* webpackIgnore: true */ "pdf-parse");
-    const PDFParse = (mod as { PDFParse?: new (opts: { data: Uint8Array }) => { getText: () => Promise<{ text?: string }>; destroy?: () => Promise<void> } }).PDFParse;
+    const PDFParse = (
+      mod as {
+        PDFParse?: (new (opts: { data: Uint8Array }) => {
+          getText: () => Promise<{ text?: string }>;
+          destroy?: () => Promise<void>;
+        }) & { setWorker?: (src?: string) => string };
+      }
+    ).PDFParse;
     if (!PDFParse) throw new Error("pdf-parse PDFParse export missing");
+    const worker = pdfWorkerSrc();
+    if (worker) PDFParse.setWorker?.(worker);
     const parser = new PDFParse({ data: bytes });
     const result = await parser.getText();
     parsed = (result?.text || "").trim();

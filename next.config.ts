@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Keep native and Node-only libraries out of the Turbopack server bundle.
-  serverExternalPackages: ["pdf-parse", "ssh2", "ssh2-sftp-client"],
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "ssh2", "ssh2-sftp-client"],
   outputFileTracingIncludes: {
     "/api/app/upload-invoice": ["./node_modules/pdf-parse/**/*", "./node_modules/pdfjs-dist/**/*"],
     "/api/v1/invoices": ["./node_modules/pdf-parse/**/*", "./node_modules/pdfjs-dist/**/*"],

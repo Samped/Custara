@@ -99,8 +99,14 @@ export async function assessRisks(
     });
   }
 
-  // Same-bytes document across invoices (enterprise fraud signal)
-  const docs = await prisma.invoiceDocument.findMany({
+  // Same-bytes document across invoices. An unread file is not a duplicate of another unread file.
+  const unread =
+    extraction.totalAmount <= 0 &&
+    (!extraction.vendorName || /^unknown\b/i.test(extraction.vendorName)) &&
+    (extraction.confidence < 0.4 || extraction.invoiceNumber.startsWith("UNK-"));
+  const docs = unread
+    ? []
+    : await prisma.invoiceDocument.findMany({
     where: { invoiceId, deletedAt: null, checksumSha256: { not: null } },
     select: { checksumSha256: true, filename: true },
   });

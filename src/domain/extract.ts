@@ -2,6 +2,8 @@ import { getObject } from "@/lib/storage";
 import { prisma } from "@/lib/db";
 import { extractionSchema, type Extraction } from "@/lib/types";
 import { encryptField, last4 } from "@/lib/crypto";
+// Static import so the live upload function ships the PDF reader with it.
+import "pdf-parse";
 
 function parseLooseJson(text: string): Record<string, unknown> | null {
   try {
@@ -99,6 +101,9 @@ function guessVendorName(text: string): string | null {
     text.match(/Vendor:\s*(.+)/i)?.[1]?.trim() ||
     text.match(/From:\s*(.+)/i)?.[1]?.trim() ||
     text.match(/Supplier:\s*(.+)/i)?.[1]?.trim() ||
+    text.match(/Bill(?:ed)?\s*From:\s*(.+)/i)?.[1]?.trim() ||
+    text.match(/Sold\s*By:\s*(.+)/i)?.[1]?.trim() ||
+    text.match(/Merchant:\s*(.+)/i)?.[1]?.trim() ||
     text.match(/Account Name:\s*(.+)/i)?.[1]?.trim();
   if (labeled && !/^unknown/i.test(labeled)) {
     return labeled.split("\n")[0].replace(/\)\s*Tj\b.*$/i, "").trim();
@@ -113,7 +118,7 @@ function guessVendorName(text: string): string | null {
     /^(invoice|tax\s*invoice|bill\s*to|ship\s*to|description|qty|quantity|amount|payment|project|date|due|total|subtotal|page|notes?)\b/i;
   const addressLike = /^(\d+|phone:|email:|tel:|fax:|www\.|http|p\.?o\.?\s*box)/i;
   const companyHint =
-    /\b(corp|corporation|inc|llc|ltd|limited|gmbh|plc|co\.|company|services|solutions|labs?)\b/i;
+    /\b(corp|corporation|inc|llc|ltd|limited|gmbh|plc|co\b|company|services|solutions|labs?|supply)\b/i;
 
   // Prefer a company-like line before BILL TO / invoice body
   const billIdx = lines.findIndex((l) => /^bill\s*to\b/i.test(l));
@@ -136,8 +141,10 @@ function guessVendorName(text: string): string | null {
 
 function extractInvoiceNumber(text: string): string | null {
   return (
-    text.match(/Invoice\s*(?:Number|No\.?|#)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/]+)/i)?.[1]?.trim() ||
-    text.match(/\bINV[-\s]?([A-Z0-9\-\/]+)/i)?.[0]?.trim() ||
+    text.match(/Invoice\s*(?:Number|No\.?|#|ID)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/]+)/i)?.[1]?.trim() ||
+    text.match(/Bill\s*(?:Number|No\.?|#)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/]+)/i)?.[1]?.trim() ||
+    text.match(/\bINV[-\s]?([A-Z0-9][A-Z0-9\-\/]+)/i)?.[0]?.trim() ||
+    text.match(/(?:^|\n)\s*(?:No\.?|#)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/]{2,})/i)?.[1]?.trim() ||
     null
   );
 }
@@ -148,7 +155,9 @@ function extractTotalAmount(text: string): number | null {
     /Amount\s*Due\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
     /Grand\s*Total\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
     /Balance\s*Due\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
-    /Total\s*(?:Amount)?\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+    /Total\s*(?:Amount|Due)?\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+    /Amount\s*(?:Due|Payable)?\s*[:\-]?\s*([€£₦$]?\s*[\d,]+\.?\d*)/i,
+    /(?:USDC|USD|NGN)\s*([\d,]+\.?\d*)/i,
   ];
   for (const re of patterns) {
     const m = text.match(re);
@@ -458,11 +467,13 @@ export function textFromPdfLiterals(buf: Buffer): string {
 async function extractPdfText(buf: Buffer): Promise<string> {
   let parsed = "";
   try {
-    // Force Node build — Turbopack can resolve the browser export otherwise.
+    const bytes = new Uint8Array(buf.byteLength);
+    bytes.set(buf);
+    // Native import so Node loads the server build, not the browser build.
     const mod = await import(/* webpackIgnore: true */ "pdf-parse");
-    const PDFParse = (mod as { PDFParse?: new (opts: { data: Buffer }) => { getText: () => Promise<{ text?: string }>; destroy?: () => Promise<void> } }).PDFParse;
+    const PDFParse = (mod as { PDFParse?: new (opts: { data: Uint8Array }) => { getText: () => Promise<{ text?: string }>; destroy?: () => Promise<void> } }).PDFParse;
     if (!PDFParse) throw new Error("pdf-parse PDFParse export missing");
-    const parser = new PDFParse({ data: Buffer.from(buf) });
+    const parser = new PDFParse({ data: bytes });
     const result = await parser.getText();
     parsed = (result?.text || "").trim();
     await parser.destroy?.();

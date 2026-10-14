@@ -69,6 +69,21 @@ Bank: Access Bank
     assert.equal(e!.currency, "NGN");
   });
 
+  it("reads a plain invoice without a Vendor label", () => {
+    const e = extractFromText(`
+Beacon Supply Co
+Invoice
+No. 10421
+Date: 10 Oct 2026
+Due Date: 20 Oct 2026
+Total 2.75 USDC
+`);
+    assert.ok(e);
+    assert.equal(e!.vendorName, "Beacon Supply Co");
+    assert.equal(e!.invoiceNumber, "10421");
+    assert.equal(e!.totalAmount, 2.75);
+  });
+
   it("extracts from the downloaded sample PDF bytes via pdf-parse", async () => {
     const pdfPath = "/home/samuel/Downloads/invoice_sample.pdf";
     let buf: Buffer;

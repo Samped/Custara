@@ -289,10 +289,11 @@ export async function createPaymentIntent(input: {
 
       const current = await prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
       const settled = current.status === "completed" || current.status === "failed";
+      const accepted = Boolean(current.circleTxId) || current.status === "pending_transfer";
       const updated = await prisma.paymentIntent.update({
         where: { id: intent.id },
         data: {
-          status: settled ? current.status : "pending_transfer",
+          status: settled ? current.status : accepted ? "pending_transfer" : current.status,
           providerRef: current.circleTxId || current.providerRef || task.id,
         },
       });

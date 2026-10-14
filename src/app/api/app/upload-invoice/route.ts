@@ -28,7 +28,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "File required" }, { status: 400 });
       }
       const bytes = Buffer.from(body.contentBase64, "base64");
-      file = new File([bytes], body.fileName, {
+      // Copy into a fresh ArrayBuffer. A pooled Buffer view can make File include extra bytes.
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      file = new File([copy], body.fileName, {
         type: body.contentType || "application/octet-stream",
       });
     } else {

@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { createWorker, ensureRepeatableJob } from "@/lib/jobs";
 import { runInvoicePipeline } from "@/domain/pipeline";
-import { runAgentTask } from "@/domain/arc/tasks";
+import { resumeStuckArcPayments, runAgentTask } from "@/domain/arc/tasks";
 import { attemptWebhookDelivery } from "@/lib/webhooks";
 import { syncXeroInbound } from "@/domain/connectors/xero";
 import { pollAllMailboxes } from "@/domain/mailbox";
@@ -104,6 +104,11 @@ async function main() {
   });
 
   const payScheduleWorker = createWorker("payment-schedule", async (name) => {
+    if (name === "resume_arc") {
+      const summary = await resumeStuckArcPayments();
+      console.log("[arc-resume]", JSON.stringify(summary));
+      return;
+    }
     if (name !== "run_autopay") throw new Error(`Unknown job ${name}`);
     const summary = await runScheduledAutoPays();
     console.log("[payment-schedule]", JSON.stringify(summary));
@@ -157,6 +162,15 @@ async function main() {
     everyMs: 15 * 60_000,
     jobId: "cron-autopay",
   });
+  await ensureRepeatableJob({
+    queue: "payment-schedule",
+    name: "resume_arc",
+    everyMs: 2 * 60_000,
+    jobId: "cron-arc-resume",
+  });
+  await resumeStuckArcPayments()
+    .then((summary) => console.log("[arc-resume] startup", JSON.stringify(summary)))
+    .catch((err) => console.error("[arc-resume] startup failed", err instanceof Error ? err.message : err));
   await ensureRepeatableJob({
     queue: "collections-dunning",
     name: "run_dunning",

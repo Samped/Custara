@@ -5,6 +5,8 @@ import { assertRateLimit } from "@/lib/rateLimit";
 import { hashRequestBody, withIdempotency } from "@/lib/idempotency";
 import { createRequestId } from "@/lib/audit";
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const auth = await authenticateApiKey(request.headers.get("authorization"), ["payments:initiate"]);

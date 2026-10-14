@@ -13,6 +13,7 @@ import {
   statusBadgeClass,
 } from "@/lib/format";
 import { InvoiceUploadForm } from "@/components/app/InvoiceUploadForm";
+import { resumeStuckArcPayments } from "@/domain/arc/tasks";
 import { DashboardActivityChart } from "@/components/app/DashboardActivityChart";
 import { ClickableRow } from "@/components/app/ClickableRow";
 
@@ -33,6 +34,7 @@ export default async function DashboardPage() {
   }
 
   const canUpload = roleHasCapability(user.role, "inbox:write");
+  await resumeStuckArcPayments(user.organizationId).catch(() => null);
   const dash = await getDashboardSummary(user.organizationId);
   const currency = dash.displayCurrency || dash.forecast.currency;
   const attentionCount = dash.pendingApprovalCount + dash.paymentQueuedCount;

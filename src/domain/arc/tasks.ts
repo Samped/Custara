@@ -14,6 +14,7 @@ export async function enqueueAgentTask(input: {
   payload?: Record<string, unknown>;
   /** Settle a reconcile immediately when Circle is already terminal. In-flight reconciles stay queued. */
   runInline?: boolean;
+  runAt?: Date;
 }) {
   const task = await prisma.agentTask.create({
     data: {
@@ -25,16 +26,22 @@ export async function enqueueAgentTask(input: {
     },
   });
 
+  // Pay from the request. The Render worker sleeps, so a queued transfer stays on Sending.
+  const runInRequest = input.runInline || (input.type === "arc_transfer" && !input.runAt);
+  if (runInRequest) {
+    await runAgentTask(task.id);
+    return task;
+  }
+
   const queued = await enqueueJob({
     queue: "agent-tasks",
     name: input.type,
     organizationId: input.organizationId,
     payload: { agentTaskId: task.id },
+    runAt: input.runAt,
   });
 
-  // Local CLI pay has no Redis worker. Run the transfer in this request.
-  // An in-flight reconcile must stay queued: "still QUEUED" is a retry, not a failed payment.
-  const runNow = !queued.bullmqId && (input.type !== "arc_reconcile" || input.runInline);
+  const runNow = !queued.bullmqId && input.type !== "arc_reconcile";
   if (runNow) {
     try {
       await runAgentTask(task.id);
@@ -49,13 +56,15 @@ export async function enqueueAgentTask(input: {
 }
 
 export async function runAgentTask(agentTaskId: string) {
-  const task = await prisma.agentTask.findUniqueOrThrow({ where: { id: agentTaskId } });
-  if (task.status === "completed") return task;
-
-  await prisma.agentTask.update({
-    where: { id: task.id },
+  const claimed = await prisma.agentTask.updateMany({
+    where: { id: agentTaskId, status: "pending" },
     data: { status: "running", attempts: { increment: 1 } },
   });
+  if (claimed.count === 0) {
+    return prisma.agentTask.findUniqueOrThrow({ where: { id: agentTaskId } });
+  }
+
+  const task = await prisma.agentTask.findUniqueOrThrow({ where: { id: agentTaskId } });
 
   try {
     if (task.type === "wallet_sync") {
@@ -358,7 +367,18 @@ async function executeArcReconcileTask(taskId: string) {
   }
 
   if (!["COMPLETE", "COMPLETED", "CONFIRMED"].includes(state)) {
-    // re-queue soft fail for worker retry
+    const payload = JSON.parse(task.payloadJson || "{}") as { poll?: number };
+    const poll = Number(payload.poll || 0);
+    if (poll < 48) {
+      await enqueueAgentTask({
+        organizationId: task.organizationId,
+        type: "arc_reconcile",
+        paymentIntentId: intent.id,
+        payload: { circleTxId: tx.id, poll: poll + 1 },
+        runAt: new Date(Date.now() + 45_000),
+      });
+      return;
+    }
     throw new Error(`Transfer still ${state}`);
   }
 
@@ -396,6 +416,66 @@ async function executeArcReconcileTask(taskId: string) {
     entityId: intent.id,
     metadata: { circleTxId: tx.id, txHash: tx.txHash },
   });
+}
+
+/** Finish transfers the sleeping worker never picked up, and keep polling ones Circle has accepted. */
+export async function resumeStuckArcPayments(organizationId?: string) {
+  const cutoff = new Date(Date.now() - 90_000);
+  const intents = await prisma.paymentIntent.findMany({
+    where: {
+      ...(organizationId ? { organizationId } : {}),
+      rail: "arc_usdc",
+      status: { in: ["queued", "pending_transfer"] },
+      updatedAt: { lt: cutoff },
+    },
+    take: 5,
+    orderBy: { updatedAt: "asc" },
+  });
+  let resumed = 0;
+  for (const intent of intents) {
+    if (intent.circleTxId) {
+      const openReconcile = await prisma.agentTask.findFirst({
+        where: {
+          paymentIntentId: intent.id,
+          type: "arc_reconcile",
+          status: { in: ["pending", "running"] },
+        },
+      });
+      if (openReconcile) continue;
+      await enqueueAgentTask({
+        organizationId: intent.organizationId,
+        type: "arc_reconcile",
+        paymentIntentId: intent.id,
+        payload: { circleTxId: intent.circleTxId, source: "sweep" },
+        runInline: true,
+      });
+      resumed += 1;
+      continue;
+    }
+
+    const openTransfer = await prisma.agentTask.findFirst({
+      where: {
+        paymentIntentId: intent.id,
+        type: "arc_transfer",
+        status: { in: ["pending", "running"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (openTransfer?.status === "running") continue;
+    if (openTransfer?.status === "pending") {
+      await runAgentTask(openTransfer.id);
+      resumed += 1;
+      continue;
+    }
+    await enqueueAgentTask({
+      organizationId: intent.organizationId,
+      type: "arc_transfer",
+      paymentIntentId: intent.id,
+      payload: { invoiceId: intent.invoiceId, resume: true },
+    });
+    resumed += 1;
+  }
+  return { scanned: intents.length, resumed };
 }
 
 export async function handleCircleWebhookPayload(payload: Record<string, unknown>) {

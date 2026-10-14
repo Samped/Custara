@@ -204,7 +204,8 @@ export function extractFromText(text: string): Extraction | null {
   const invoiceNumber = extractInvoiceNumber(text);
   const totalAmount = extractTotalAmount(text);
 
-  if (!vendorName || !invoiceNumber || totalAmount == null) return null;
+  // A missing invoice number used to discard the whole read, which showed Unknown Vendor and ₦0.
+  if (!vendorName && totalAmount == null) return null;
 
   const currency = detectCurrency(
     text,
@@ -243,16 +244,17 @@ export function extractFromText(text: string): Extraction | null {
 
   // Labeled fixture format used higher confidence; layout PDFs slightly lower
   const labeled = /Vendor:\s*.+/i.test(text) && /Total:\s*[0-9,.]+/i.test(text);
+  const complete = Boolean(vendorName && invoiceNumber && totalAmount != null && totalAmount > 0);
 
   return extractionSchema.parse({
-    vendorName,
-    invoiceNumber,
+    vendorName: vendorName || "Unknown Vendor",
+    invoiceNumber: invoiceNumber || `INV-${Date.now()}`,
     issueDate: parseFlexibleDate(cleanDateField(issueRaw)),
     dueDate: parseFlexibleDate(cleanDateField(dueRaw)),
     currency,
     subtotal,
     taxAmount,
-    totalAmount,
+    totalAmount: totalAmount ?? 0,
     poNumber: poNumber || null,
     accountName: accountName || null,
     accountNumber: accountNumber || null,
@@ -260,7 +262,7 @@ export function extractFromText(text: string): Extraction | null {
     bankCode,
     arcAddress: arcAddress || null,
     lineItems: [],
-    confidence: labeled ? 0.8 : 0.72,
+    confidence: complete ? (labeled ? 0.8 : 0.72) : 0.55,
   });
 }
 

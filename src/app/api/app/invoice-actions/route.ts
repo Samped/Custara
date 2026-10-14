@@ -5,6 +5,7 @@ import { createPaymentIntent } from "@/domain/payment";
 import { reconcileSettlement } from "@/domain/cash";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /** JSON invoice mutations — avoids FormData server actions broken by wallet extensions. */
 export async function POST(request: NextRequest) {

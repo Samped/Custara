@@ -265,16 +265,22 @@ export async function applyPolicy(input: {
   });
 
   if (base.requiredApprovals > 0) {
-    await prisma.approvalRequest.create({
-      data: {
-        organizationId: input.organizationId,
-        invoiceId: input.invoiceId,
-        status: "pending",
-        requiredCount: base.requiredApprovals,
-        reason: base.reason,
-        policyVersion: active?.version.version ?? null,
-      },
+    const open = await prisma.approvalRequest.findFirst({
+      where: { invoiceId: input.invoiceId, status: "pending" },
+      select: { id: true },
     });
+    if (!open) {
+      await prisma.approvalRequest.create({
+        data: {
+          organizationId: input.organizationId,
+          invoiceId: input.invoiceId,
+          status: "pending",
+          requiredCount: base.requiredApprovals,
+          reason: base.reason,
+          policyVersion: active?.version.version ?? null,
+        },
+      });
+    }
   }
 
   if (base.decision === "auto_approve") {

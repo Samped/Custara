@@ -49,13 +49,17 @@ export async function getDashboardSummary(organizationId: string) {
       select: { totalAmount: true, currency: true },
     }),
     prisma.approvalRequest.findMany({
-      where: { organizationId, status: "pending" },
+      where: {
+        organizationId,
+        status: "pending",
+        invoice: { status: "pending_approval" },
+      },
       include: { invoice: { include: { vendor: true } } },
       orderBy: { createdAt: "desc" },
       take: 6,
     }),
-    prisma.approvalRequest.count({
-      where: { organizationId, status: "pending" },
+    prisma.invoice.count({
+      where: { organizationId, status: "pending_approval" },
     }),
     prisma.invoice.count({
       where: { organizationId, status: "payment_queued" },

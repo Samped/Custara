@@ -15,9 +15,13 @@ export default async function ApprovalsPage() {
   }
 
   const approvals = await prisma.approvalRequest.findMany({
-    where: { organizationId: user.organizationId },
+    where: {
+      organizationId: user.organizationId,
+      status: "pending",
+      invoice: { status: "pending_approval" },
+    },
     include: { invoice: { include: { vendor: true, risks: true } } },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    orderBy: { createdAt: "desc" },
   });
 
   return (

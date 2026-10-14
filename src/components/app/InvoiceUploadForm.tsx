@@ -142,6 +142,8 @@ export function InvoiceUploadForm({
           }
           reject(new Error("Upload succeeded but no redirect returned"));
         };
+        xhr.timeout = 90000;
+        xhr.ontimeout = () => reject(new Error("Upload timed out. Try the file again."));
         xhr.onerror = () => reject(new Error("Network error during upload"));
         xhr.send(
           JSON.stringify({

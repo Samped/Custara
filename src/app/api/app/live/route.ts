@@ -22,7 +22,7 @@ export async function GET() {
           orderBy: { createdAt: "desc" },
           select: { balanceUsdc: true, updatedAt: true },
         }),
-        prisma.approvalRequest.count({ where: { organizationId, status: "pending" } }),
+        prisma.invoice.count({ where: { organizationId, status: "pending_approval" } }),
         prisma.invoice.count({ where: { organizationId, status: "payment_queued" } }),
         prisma.invoice.findFirst({
           where: { organizationId },

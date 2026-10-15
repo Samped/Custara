@@ -6,8 +6,7 @@ export function PlatformInsights({ metrics }: { metrics: PlatformMetrics }) {
   const stats = [
     {
       value: metrics.businessesRegistered.toLocaleString(),
-      label: "Businesses",
-      note: `${metrics.verifiedBusinesses} verified`,
+      label: "Businesses & Entities",
     },
     {
       value: metrics.invoicesProcessed.toLocaleString(),
@@ -36,7 +35,7 @@ export function PlatformInsights({ metrics }: { metrics: PlatformMetrics }) {
           <div key={item.label}>
             <dd>{item.value}</dd>
             <dt>{item.label}</dt>
-            <p>{item.note}</p>
+            {item.note ? <p>{item.note}</p> : null}
           </div>
         ))}
       </dl>

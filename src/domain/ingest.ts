@@ -39,6 +39,8 @@ export async function ingestInvoice(input: {
   mimeType?: string;
   bytes?: Buffer | null;
   structuredPayload?: Record<string, unknown> | null;
+  /** Plain text captured during split — extract reads this when PDF re-parse fails. */
+  textSidecar?: string | null;
   requestId?: string;
   enqueue?: boolean;
   sourceBatchId?: string | null;
@@ -91,7 +93,7 @@ export async function ingestInvoice(input: {
   }
 
   const org =
-    input.bytes || input.structuredPayload
+    input.bytes || input.structuredPayload || input.textSidecar
       ? await prisma.organization.findUniqueOrThrow({ where: { id: input.organizationId } })
       : null;
   const retainedUntil =
@@ -111,6 +113,22 @@ export async function ingestInvoice(input: {
         content: payload,
         byteSize: payload.length,
         checksumSha256: sha256(payload),
+        retainedUntil,
+      },
+    });
+  }
+
+  if (input.textSidecar?.trim()) {
+    const textBuf = Buffer.from(input.textSidecar, "utf8");
+    await prisma.invoiceDocument.create({
+      data: {
+        invoiceId: invoice.id,
+        filename: "page.txt",
+        mimeType: "text/plain",
+        storagePath: `db/${invoice.id}/page.txt`,
+        content: textBuf,
+        byteSize: textBuf.length,
+        checksumSha256: sha256(textBuf),
         retainedUntil,
       },
     });

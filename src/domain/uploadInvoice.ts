@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import type { SessionUser } from "@/lib/auth";
 import { sha256 } from "@/lib/crypto";
 import { InvoiceConflictError, ingestInvoice } from "@/domain/ingest";
-import { extractFromText } from "@/domain/extract";
+import { resolveChildExtractionFields } from "@/domain/extract";
 import { runInvoicePipeline } from "@/domain/pipeline";
 import { splitMultiInvoicePdf } from "@/domain/splitMultiInvoicePdf";
 
@@ -28,30 +28,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-function fieldsFromPageText(pageText?: string): Record<string, unknown> | null {
-  if (!pageText?.trim()) return null;
-  const extracted = extractFromText(pageText);
-  if (!extracted || extracted.totalAmount <= 0) return null;
-  return {
-    vendorName: extracted.vendorName,
-    invoiceNumber: extracted.invoiceNumber,
-    issueDate: extracted.issueDate,
-    dueDate: extracted.dueDate,
-    currency: extracted.currency,
-    subtotal: extracted.subtotal,
-    taxAmount: extracted.taxAmount,
-    totalAmount: extracted.totalAmount,
-    poNumber: extracted.poNumber,
-    accountName: extracted.accountName,
-    accountNumber: extracted.accountNumber,
-    bankName: extracted.bankName,
-    bankCode: extracted.bankCode,
-    arcAddress: extracted.arcAddress,
-    lineItems: extracted.lineItems,
-    confidence: Math.max(extracted.confidence, 0.85),
-  };
-}
-
 async function ingestAndAnalyze(input: {
   organizationId: string;
   actorId: string;
@@ -61,6 +37,7 @@ async function ingestAndAnalyze(input: {
   mimeType: string;
   bytes: Buffer;
   structuredPayload?: Record<string, unknown> | null;
+  textSidecar?: string | null;
   externalId?: string | null;
   sourceBatchId?: string | null;
   sourceSegmentIndex?: number | null;
@@ -79,6 +56,7 @@ async function ingestAndAnalyze(input: {
       mimeType: input.mimeType,
       bytes: input.bytes,
       structuredPayload: input.structuredPayload,
+      textSidecar: input.textSidecar,
       externalId: input.externalId,
       sourceBatchId: input.sourceBatchId,
       sourceSegmentIndex: input.sourceSegmentIndex,
@@ -146,7 +124,12 @@ export async function processInvoiceUpload(
       const batchId = `upload:${sha256(bytes)}`;
       const ids: string[] = [];
       for (const child of children) {
-        // Do not run N full pipelines in the request — that exceeds the live function limit.
+        // Resolve fields here so background extract cannot fall back to UNK on Vercel.
+        const resolved = await resolveChildExtractionFields({
+          bytes: child.bytes,
+          filename: child.filename,
+          pageText: child.pageText,
+        });
         const id = await ingestAndAnalyze({
           organizationId: user.organizationId,
           actorId: user.id,
@@ -155,7 +138,8 @@ export async function processInvoiceUpload(
           filename: child.filename,
           mimeType: "application/pdf",
           bytes: child.bytes,
-          structuredPayload: fieldsFromPageText(child.pageText),
+          structuredPayload: resolved.payload,
+          textSidecar: resolved.textSidecar,
           externalId: `${batchId}:seg:${child.index}`,
           sourceBatchId: batchId,
           sourceSegmentIndex: child.index,
@@ -208,6 +192,11 @@ export async function processPdfInvoiceBytes(input: {
     const batchId = `upload:${sha256(input.bytes)}`;
     const ids: string[] = [];
     for (const child of children) {
+      const resolved = await resolveChildExtractionFields({
+        bytes: child.bytes,
+        filename: child.filename,
+        pageText: child.pageText,
+      });
       const id = await ingestAndAnalyze({
         organizationId: input.organizationId,
         actorId: input.actorId,
@@ -216,7 +205,8 @@ export async function processPdfInvoiceBytes(input: {
         filename: child.filename,
         mimeType: "application/pdf",
         bytes: child.bytes,
-        structuredPayload: fieldsFromPageText(child.pageText),
+        structuredPayload: resolved.payload,
+        textSidecar: resolved.textSidecar,
         externalId: input.externalId
           ? `${input.externalId}:seg:${child.index}`
           : `${batchId}:seg:${child.index}`,

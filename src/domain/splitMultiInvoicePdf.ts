@@ -30,12 +30,20 @@ function pageInvoiceNumber(text: string): string | null {
 }
 
 function pageVendorHint(text: string): string | null {
-  return (
-    text.match(/Vendor:\s*(.+)/i)?.[1]?.trim()?.split("\n")[0]?.slice(0, 80) ||
-    text.match(/From:\s*(.+)/i)?.[1]?.trim()?.split("\n")[0]?.slice(0, 80) ||
-    text.match(/Supplier:\s*(.+)/i)?.[1]?.trim()?.split("\n")[0]?.slice(0, 80) ||
-    null
-  );
+  const raw =
+    text.match(/Vendor:\s*(.+)/i)?.[1]?.trim() ||
+    text.match(/From:\s*(.+)/i)?.[1]?.trim() ||
+    text.match(/Supplier:\s*(.+)/i)?.[1]?.trim() ||
+    null;
+  if (!raw) return null;
+  return raw
+    .split("\n")[0]
+    .replace(
+      /\s+(?:Invoice\s*(?:Number|No\.?|#|ID)|Currency|Total|Due|PO(?:\s*Number)?|Arc\s*Address|Bill\s*To)\b.*$/i,
+      "",
+    )
+    .trim()
+    .slice(0, 80);
 }
 
 function looksLikeInvoiceStart(text: string): boolean {
@@ -278,7 +286,20 @@ export async function splitMultiInvoicePdf(
   for (let i = 0; i < segments.length; i += 1) {
     const seg = segments[i];
     const bytes = await buildChildPdf(buf, seg.pageStart, seg.pageEnd);
-    const pageText = segmentText(pages, seg.pageStart, seg.pageEnd);
+    let pageText = segmentText(pages, seg.pageStart, seg.pageEnd);
+    // Re-read the child alone — serverless sometimes returns empty whole-doc page shells.
+    if (pageText.replace(/\s/g, "").length < 8) {
+      try {
+        const alone = await loadPdfPages(bytes);
+        pageText = alone.text.trim();
+      } catch (err) {
+        console.warn(
+          "[custara] child page re-read failed",
+          seg.pageStart,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
     children.push({
       index: i + 1,
       pageStart: seg.pageStart,

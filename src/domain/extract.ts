@@ -95,6 +95,17 @@ function detectCurrency(text: string, explicit?: string | null): string {
   return "USD";
 }
 
+function clipLabeledValue(raw: string): string {
+  return raw
+    .split("\n")[0]
+    .replace(
+      /\s+(?:Invoice\s*(?:Number|No\.?|#|ID)|Currency|Total|Due|PO(?:\s*Number)?|Arc\s*Address|Bill\s*To|Account|Bank|Subtotal|Tax)\b.*$/i,
+      "",
+    )
+    .replace(/\)\s*Tj\b.*$/i, "")
+    .trim();
+}
+
 function guessVendorName(text: string): string | null {
   const labeled =
     text.match(/Vendor:\s*(.+)/i)?.[1]?.trim() ||
@@ -105,7 +116,7 @@ function guessVendorName(text: string): string | null {
     text.match(/Merchant:\s*(.+)/i)?.[1]?.trim() ||
     text.match(/Account Name:\s*(.+)/i)?.[1]?.trim();
   if (labeled && !/^unknown/i.test(labeled)) {
-    return labeled.split("\n")[0].replace(/\)\s*Tj\b.*$/i, "").trim();
+    return clipLabeledValue(labeled);
   }
 
   const lines = text
@@ -413,6 +424,61 @@ async function maybeLlmVisionExtract(buf: Buffer, mimeType: string, filename: st
   }
 }
 
+function extractionToPayload(extracted: Extraction): Record<string, unknown> {
+  return {
+    vendorName: extracted.vendorName,
+    invoiceNumber: extracted.invoiceNumber,
+    issueDate: extracted.issueDate,
+    dueDate: extracted.dueDate,
+    currency: extracted.currency,
+    subtotal: extracted.subtotal,
+    taxAmount: extracted.taxAmount,
+    totalAmount: extracted.totalAmount,
+    poNumber: extracted.poNumber,
+    accountName: extracted.accountName,
+    accountNumber: extracted.accountNumber,
+    bankName: extracted.bankName,
+    bankCode: extracted.bankCode,
+    arcAddress: extracted.arcAddress,
+    lineItems: extracted.lineItems,
+    confidence: Math.max(extracted.confidence, 0.85),
+  };
+}
+
+/**
+ * Resolve invoice fields for a split child before ingest.
+ * Used when serverless PDF re-read in the later pipeline would otherwise yield UNK.
+ */
+export async function resolveChildExtractionFields(input: {
+  bytes: Buffer;
+  filename: string;
+  pageText?: string;
+}): Promise<{ payload: Record<string, unknown> | null; textSidecar?: string }> {
+  let text = (input.pageText || "").trim();
+  if (text.replace(/\s/g, "").length < 8) {
+    text = (await extractPdfText(input.bytes)).trim();
+  }
+  if (!text) {
+    text = textFromPdfLiterals(input.bytes).trim();
+  }
+
+  const fromText = text ? extractFromText(text) : null;
+  if (fromText && fromText.totalAmount > 0) {
+    return { payload: extractionToPayload(fromText), textSidecar: text };
+  }
+
+  const fromVision = await maybeLlmVisionExtract(input.bytes, "application/pdf", input.filename);
+  if (fromVision && fromVision.totalAmount > 0) {
+    return { payload: extractionToPayload(fromVision), textSidecar: text || undefined };
+  }
+
+  if (fromText) {
+    return { payload: extractionToPayload(fromText), textSidecar: text || undefined };
+  }
+
+  return { payload: null, textSidecar: text || undefined };
+}
+
 /**
  * Read text operators out of a PDF when the parser is missing or returns nothing.
  * Generated invoices store lines as `(Vendor: …) Tj`.
@@ -490,11 +556,14 @@ export async function extractInvoice(invoiceId: string): Promise<Extraction> {
     where: { invoiceId, deletedAt: null },
     orderBy: { createdAt: "asc" },
   });
-  // Prefer structured JSON (written first on multi-invoice splits) over PDF re-parse.
+  // Prefer structured JSON / page text (from multi-invoice split) over PDF re-parse.
   docs.sort((a, b) => {
-    const aJson = a.mimeType.includes("json") || a.filename.endsWith(".json") ? 0 : 1;
-    const bJson = b.mimeType.includes("json") || b.filename.endsWith(".json") ? 0 : 1;
-    return aJson - bJson;
+    const rank = (d: (typeof docs)[number]) => {
+      if (d.mimeType.includes("json") || d.filename.endsWith(".json")) return 0;
+      if (d.mimeType.includes("text") || d.filename.endsWith(".txt")) return 1;
+      return 2;
+    };
+    return rank(a) - rank(b);
   });
 
   let extraction: Extraction | null = null;
@@ -506,9 +575,13 @@ export async function extractInvoice(invoiceId: string): Promise<Extraction> {
     if (doc.mimeType.includes("json") || doc.filename.endsWith(".json")) {
       const parsed = parseLooseJson(buf.toString("utf8"));
       if (parsed) {
-        extraction = deterministicExtract(parsed);
-        break;
+        const fromJson = deterministicExtract(parsed);
+        if (fromJson.totalAmount > 0 && fromJson.vendorName !== "Unknown Vendor") {
+          extraction = fromJson;
+          break;
+        }
       }
+      continue;
     }
 
     let text = "";

@@ -5,6 +5,8 @@ import { PDFDocument } from "pdf-lib";
 
 export type PageText = { num: number; text: string };
 
+const requireFromRoot = createRequire(path.join(process.cwd(), "package.json"));
+
 /** Vercel defaults to Node 20; pdf.js requires Promise.withResolvers (Node 22+). */
 function ensurePromiseWithResolvers() {
   if (typeof Promise.withResolvers === "function") return;
@@ -24,9 +26,7 @@ ensurePromiseWithResolvers();
 
 function pdfjsAssetDirs(): { standardFontDataUrl?: string; cMapUrl?: string } {
   try {
-    const requireFromRoot = createRequire(path.join(process.cwd(), "package.json"));
-    const pdfjsEntry = requireFromRoot.resolve("pdfjs-dist/package.json");
-    const root = path.dirname(pdfjsEntry);
+    const root = path.dirname(requireFromRoot.resolve("pdfjs-dist/package.json"));
     return {
       standardFontDataUrl: pathToFileURL(path.join(root, "standard_fonts") + path.sep).href,
       cMapUrl: pathToFileURL(path.join(root, "cmaps") + path.sep).href,
@@ -38,11 +38,17 @@ function pdfjsAssetDirs(): { standardFontDataUrl?: string; cMapUrl?: string } {
 
 function pdfWorkerSrc(): string | undefined {
   try {
-    const requireFromRoot = createRequire(path.join(process.cwd(), "package.json"));
     return pathToFileURL(requireFromRoot.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")).href;
   } catch {
     return undefined;
   }
+}
+
+/** Absolute file URL import — more reliable on Vercel than a bare package specifier. */
+async function importPdfJs() {
+  ensurePromiseWithResolvers();
+  const pdfPath = requireFromRoot.resolve("pdfjs-dist/legacy/build/pdf.mjs");
+  return import(/* webpackIgnore: true */ pathToFileURL(pdfPath).href);
 }
 
 type PdfParseCtor = (new (opts: { data: Uint8Array }) => {
@@ -54,8 +60,14 @@ async function openPdfParse(buf: Buffer) {
   ensurePromiseWithResolvers();
   const bytes = new Uint8Array(buf.byteLength);
   bytes.set(buf);
-  const mod = await import(/* webpackIgnore: true */ "pdf-parse");
-  const PDFParse = (mod as { PDFParse?: PdfParseCtor }).PDFParse;
+  let mod: { PDFParse?: PdfParseCtor };
+  try {
+    const parsePath = requireFromRoot.resolve("pdf-parse");
+    mod = await import(/* webpackIgnore: true */ pathToFileURL(parsePath).href);
+  } catch {
+    mod = await import(/* webpackIgnore: true */ "pdf-parse");
+  }
+  const PDFParse = mod.PDFParse;
   if (!PDFParse) throw new Error("pdf-parse PDFParse export missing");
   const worker = pdfWorkerSrc();
   if (worker) PDFParse.setWorker?.(worker);
@@ -83,7 +95,7 @@ async function loadWithPdfParse(buf: Buffer): Promise<{ pages: PageText[]; total
 /** pdf.js text extraction — works on Vercel when pdf-parse's worker path breaks. */
 export async function loadWithPdfJs(buf: Buffer): Promise<{ pages: PageText[]; total: number; text: string }> {
   ensurePromiseWithResolvers();
-  const pdfjs = await import(/* webpackIgnore: true */ "pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await importPdfJs();
   const worker = pdfWorkerSrc();
   if (worker && pdfjs.GlobalWorkerOptions) {
     pdfjs.GlobalWorkerOptions.workerSrc = worker;
@@ -96,7 +108,6 @@ export async function loadWithPdfJs(buf: Buffer): Promise<{ pages: PageText[]; t
     data,
     useSystemFonts: true,
     isEvalSupported: false,
-    // Prefer in-process parsing on serverless; worker files are often missing from the bundle.
     disableWorker: true,
     ...assets,
     cMapPacked: true,
@@ -108,7 +119,7 @@ export async function loadWithPdfJs(buf: Buffer): Promise<{ pages: PageText[]; t
       const page = await doc.getPage(num);
       const content = await page.getTextContent();
       const text = content.items
-        .map((item) => ("str" in item && typeof item.str === "string" ? item.str : ""))
+        .map((item: { str?: string }) => (typeof item.str === "string" ? item.str : ""))
         .join(" ")
         .replace(/\s+/g, " ")
         .trim();
@@ -136,7 +147,7 @@ function nonEmptyCount(pages: PageText[]): number {
 
 /**
  * Load per-page text for split + extract.
- * Order: pdf-parse → pdf.js → empty page shells from pdf-lib (never throws).
+ * Order: pdf.js (createRequire) → pdf-parse → empty page shells from pdf-lib (never throws).
  */
 export async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; total: number; text: string }> {
   ensurePromiseWithResolvers();
@@ -147,18 +158,19 @@ export async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; to
     pageCountHint = 0;
   }
 
-  try {
-    const parsed = await loadWithPdfParse(buf);
-    if (nonEmptyCount(parsed.pages) >= 1) return parsed;
-  } catch (err) {
-    console.warn("[custara] pdf-parse page load failed", err instanceof Error ? err.message : err);
-  }
-
+  // Prefer pdf.js first on serverless — pdf-parse wraps the same engine and often fails first.
   try {
     const viaJs = await loadWithPdfJs(buf);
     if (nonEmptyCount(viaJs.pages) >= 1 || viaJs.total >= 2) return viaJs;
   } catch (err) {
     console.warn("[custara] pdfjs page load failed", err instanceof Error ? err.message : err);
+  }
+
+  try {
+    const parsed = await loadWithPdfParse(buf);
+    if (nonEmptyCount(parsed.pages) >= 1) return parsed;
+  } catch (err) {
+    console.warn("[custara] pdf-parse page load failed", err instanceof Error ? err.message : err);
   }
 
   if (pageCountHint >= 1) return emptyPages(pageCountHint);
@@ -169,17 +181,17 @@ export async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; to
 export async function extractPdfText(buf: Buffer): Promise<string> {
   ensurePromiseWithResolvers();
   try {
-    const parsed = await loadWithPdfParse(buf);
-    if (parsed.text.replace(/\s/g, "").length >= 40) return parsed.text;
-  } catch (err) {
-    console.warn("[custara] extractPdfText pdf-parse failed", err instanceof Error ? err.message : err);
-  }
-
-  try {
     const viaJs = await loadWithPdfJs(buf);
     if (viaJs.text.replace(/\s/g, "").length >= 8) return viaJs.text;
   } catch (err) {
     console.warn("[custara] extractPdfText pdfjs failed", err instanceof Error ? err.message : err);
+  }
+
+  try {
+    const parsed = await loadWithPdfParse(buf);
+    if (parsed.text.replace(/\s/g, "").length >= 40) return parsed.text;
+  } catch (err) {
+    console.warn("[custara] extractPdfText pdf-parse failed", err instanceof Error ? err.message : err);
   }
 
   return "";

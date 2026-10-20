@@ -5,6 +5,28 @@ import { InvoiceConflictError, ingestInvoice } from "@/domain/ingest";
 import { runInvoicePipeline } from "@/domain/pipeline";
 import { splitMultiInvoicePdf } from "@/domain/splitMultiInvoicePdf";
 
+export type InvoiceUploadResult = {
+  redirectTo: string;
+  /** Created invoices that still need extract/risk/policy after the HTTP response. */
+  pendingInvoiceIds?: string[];
+};
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 async function ingestAndAnalyze(input: {
   organizationId: string;
   actorId: string;
@@ -17,8 +39,11 @@ async function ingestAndAnalyze(input: {
   sourceBatchId?: string | null;
   sourceSegmentIndex?: number | null;
   enqueue?: boolean;
+  /** When false, only store the file — caller runs the pipeline later. */
+  analyze?: boolean;
 }): Promise<string> {
   try {
+    const analyze = input.analyze !== false;
     const invoice = await ingestInvoice({
       organizationId: input.organizationId,
       actorType: input.actorType,
@@ -30,9 +55,9 @@ async function ingestAndAnalyze(input: {
       externalId: input.externalId,
       sourceBatchId: input.sourceBatchId,
       sourceSegmentIndex: input.sourceSegmentIndex,
-      enqueue: input.enqueue ?? false,
+      enqueue: analyze ? (input.enqueue ?? false) : false,
     });
-    if (input.enqueue === false || input.enqueue == null) {
+    if (analyze && (input.enqueue === false || input.enqueue == null)) {
       await runInvoicePipeline(invoice.id, { type: input.actorType, id: input.actorId });
     }
     return invoice.id;
@@ -48,7 +73,7 @@ async function ingestAndAnalyze(input: {
 export async function processInvoiceUpload(
   user: SessionUser,
   file: File,
-): Promise<{ redirectTo: string }> {
+): Promise<InvoiceUploadResult> {
   if (!file || file.size === 0) {
     throw new Error("File required");
   }
@@ -82,11 +107,18 @@ export async function processInvoiceUpload(
   }
 
   if (isPdf && !isJson) {
-    const children = await splitMultiInvoicePdf(bytes, file.name);
+    let children: Awaited<ReturnType<typeof splitMultiInvoicePdf>> = null;
+    try {
+      children = await withTimeout(splitMultiInvoicePdf(bytes, file.name), 25_000, "Multi-invoice split");
+    } catch (err) {
+      console.warn("[custara] multi-invoice split skipped", err instanceof Error ? err.message : err);
+      children = null;
+    }
     if (children && children.length >= 2) {
       const batchId = `upload:${sha256(bytes)}`;
       const ids: string[] = [];
       for (const child of children) {
+        // Do not run N full pipelines in the request — that exceeds the live function limit.
         const id = await ingestAndAnalyze({
           organizationId: user.organizationId,
           actorId: user.id,
@@ -99,12 +131,16 @@ export async function processInvoiceUpload(
           sourceBatchId: batchId,
           sourceSegmentIndex: child.index,
           enqueue: false,
+          analyze: false,
         });
         ids.push(id);
       }
       revalidatePath("/app");
       revalidatePath("/app/inbox");
-      return { redirectTo: `/app/inbox?bulk=${ids.length}&split=1` };
+      return {
+        redirectTo: `/app/inbox?bulk=${ids.length}&split=1`,
+        pendingInvoiceIds: ids,
+      };
     }
   }
 
@@ -156,9 +192,22 @@ export async function processPdfInvoiceBytes(input: {
           : `${batchId}:seg:${child.index}`,
         sourceBatchId: batchId,
         sourceSegmentIndex: child.index,
+        // Packs: store first, then analyze in parallel (or enqueue when async).
         enqueue: !sync,
+        analyze: false,
       });
       ids.push(id);
+    }
+    if (sync) {
+      await Promise.allSettled(
+        ids.map((invoiceId) =>
+          runInvoicePipeline(invoiceId, {
+            type: input.actorType,
+            id: input.actorId,
+            requestId: input.requestId,
+          }),
+        ),
+      );
     }
     return { ids, split: true };
   }

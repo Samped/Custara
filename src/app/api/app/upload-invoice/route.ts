@@ -1,9 +1,13 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { AuthError, requireSessionUser } from "@/lib/auth";
 import { processInvoiceUpload } from "@/domain/uploadInvoice";
+import { runInvoicePipeline } from "@/domain/pipeline";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Multi-invoice packs finish analysis after the response; keep room for that work.
+export const maxDuration = 300;
 
 /**
  * Invoice upload — prefers JSON { fileName, contentBase64 } (wallet-extension safe).
@@ -45,6 +49,29 @@ export async function POST(req: Request) {
     }
 
     const result = await processInvoiceUpload(user, file);
+
+    if (result.pendingInvoiceIds?.length) {
+      const ids = result.pendingInvoiceIds;
+      const actorId = user.id;
+      after(async () => {
+        await Promise.allSettled(
+          ids.map(async (invoiceId) => {
+            try {
+              await runInvoicePipeline(invoiceId, { type: "user", id: actorId });
+            } catch (err) {
+              console.warn(
+                "[custara] background pipeline failed",
+                invoiceId,
+                err instanceof Error ? err.message : err,
+              );
+            }
+          }),
+        );
+        revalidatePath("/app");
+        revalidatePath("/app/inbox");
+      });
+    }
+
     if (wantsJson) {
       return NextResponse.json({ ok: true, redirectTo: result.redirectTo });
     }

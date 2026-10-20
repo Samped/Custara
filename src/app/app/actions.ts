@@ -14,8 +14,31 @@ export async function uploadInvoiceAction(formData: FormData) {
     throw new Error("File required");
   }
   const { processInvoiceUpload } = await import("@/domain/uploadInvoice");
-  const { redirectTo } = await processInvoiceUpload(user, file);
-  redirect(redirectTo);
+  const { runInvoicePipeline } = await import("@/domain/pipeline");
+  const { after } = await import("next/server");
+  const result = await processInvoiceUpload(user, file);
+  if (result.pendingInvoiceIds?.length) {
+    const ids = result.pendingInvoiceIds;
+    const actorId = user.id;
+    after(async () => {
+      await Promise.allSettled(
+        ids.map(async (invoiceId) => {
+          try {
+            await runInvoicePipeline(invoiceId, { type: "user", id: actorId });
+          } catch (err) {
+            console.warn(
+              "[custara] background pipeline failed",
+              invoiceId,
+              err instanceof Error ? err.message : err,
+            );
+          }
+        }),
+      );
+      revalidatePath("/app");
+      revalidatePath("/app/inbox");
+    });
+  }
+  redirect(result.redirectTo);
 }
 
 export async function syncMailboxAction() {

@@ -54,7 +54,7 @@ export default async function InboxPage({
         {params.bulk ? (
           <p className="dash-sub">
             {params.split === "1"
-              ? `Split into ${params.bulk} invoices from one PDF`
+              ? `Split into ${params.bulk} invoices from one PDF. Extraction finishes in the background — refresh in a few seconds.`
               : `Bulk ingest: ${params.bulk} created`}
             {params.failed && Number(params.failed) > 0 ? ` · ${params.failed} failed` : ""}
           </p>

@@ -47,7 +47,6 @@ After a schema change, restart `npm run dev` if a page reports an unknown Prisma
 
 ```bash
 npm test
-npm run fixtures:generate
 E2E=1 npm run test:e2e
 ```
 

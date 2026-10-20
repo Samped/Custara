@@ -184,13 +184,12 @@ ERP shape notes: [docs/erp-adapters.md](docs/erp-adapters.md)
 
 ```bash
 npm test                 # unit: tenant isolation + policy money + csv parse
-npm run fixtures:generate
 E2E=1 npm run test:e2e   # API/domain E2E (app + DB + seed; Arc skips without Circle)
 npx playwright install chromium
 npm run test:e2e:ui      # Playwright smoke (app must be running)
 ```
 
-Full checklist: [docs/qa-runbook.md](docs/qa-runbook.md). Agent tasks / Arc on-chain: [docs/agent-payments.md](docs/agent-payments.md). Sample files: [fixtures/](fixtures/).
+Full checklist: [docs/qa-runbook.md](docs/qa-runbook.md). Agent tasks / Arc on-chain: [docs/agent-payments.md](docs/agent-payments.md). Sample payloads: [fixtures/](fixtures/).
 
 ---
 

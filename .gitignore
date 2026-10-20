@@ -12,8 +12,9 @@
 /coverage
 /test-results/
 /playwright-report/
-# Local pay-ready / manual QA invoices (regenerate; do not push)
+# Local scratch / runtime artifacts
 /test-fixtures/
+*.pdf
 
 # next.js
 /.next/

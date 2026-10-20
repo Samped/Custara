@@ -6,6 +6,22 @@ import {
   splitMultiInvoicePdf,
 } from "../src/domain/splitMultiInvoicePdf";
 
+async function twoInvoicePdf(): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const p1 = doc.addPage([612, 792]);
+  p1.drawText("Invoice", { x: 50, y: 740, size: 18, font });
+  p1.drawText("Vendor: Acme Corp", { x: 50, y: 700, size: 12, font });
+  p1.drawText("Invoice Number: INV-1001", { x: 50, y: 680, size: 12, font });
+  p1.drawText("Total Due: 25.00", { x: 50, y: 660, size: 12, font });
+  const p2 = doc.addPage([612, 792]);
+  p2.drawText("Invoice", { x: 50, y: 740, size: 18, font });
+  p2.drawText("Vendor: Beacon Supply Co", { x: 50, y: 700, size: 12, font });
+  p2.drawText("Invoice Number: INV-2002", { x: 50, y: 680, size: 12, font });
+  p2.drawText("Total Due: 40.00", { x: 50, y: 660, size: 12, font });
+  return Buffer.from(await doc.save());
+}
+
 describe("detectInvoiceSegmentsFromPages", () => {
   it("returns one segment for a single invoice across pages", () => {
     const segments = detectInvoiceSegmentsFromPages([
@@ -59,20 +75,7 @@ describe("splitMultiInvoicePdf", () => {
   });
 
   it("splits a two-page PDF with two invoice numbers into two child PDFs", async () => {
-    const doc = await PDFDocument.create();
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const p1 = doc.addPage([612, 792]);
-    p1.drawText("Invoice", { x: 50, y: 740, size: 18, font });
-    p1.drawText("Vendor: Acme Corp", { x: 50, y: 700, size: 12, font });
-    p1.drawText("Invoice Number: INV-1001", { x: 50, y: 680, size: 12, font });
-    p1.drawText("Total Due: 25.00", { x: 50, y: 660, size: 12, font });
-    const p2 = doc.addPage([612, 792]);
-    p2.drawText("Invoice", { x: 50, y: 740, size: 18, font });
-    p2.drawText("Vendor: Beacon Supply Co", { x: 50, y: 700, size: 12, font });
-    p2.drawText("Invoice Number: INV-2002", { x: 50, y: 680, size: 12, font });
-    p2.drawText("Total Due: 40.00", { x: 50, y: 660, size: 12, font });
-    const bytes = Buffer.from(await doc.save());
-
+    const bytes = await twoInvoicePdf();
     const children = await splitMultiInvoicePdf(bytes, "pack.pdf");
     assert.ok(children);
     assert.equal(children!.length, 2);
@@ -90,36 +93,21 @@ describe("splitMultiInvoicePdf", () => {
     assert.equal(again.getPageCount(), 1);
   });
 
-  it("splits the five-invoice sample fixture and keeps page text for extract", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve } = await import("node:path");
-    const bytes = readFileSync(resolve("fixtures/custara-multi-5.pdf"));
-    const children = await splitMultiInvoicePdf(bytes, "custara-multi-5.pdf");
-    assert.ok(children);
-    assert.equal(children!.length, 5);
-    assert.match(children![0].pageText || "", /MULTI-5001/);
-    assert.match(children![4].pageText || "", /MULTI-5005/);
-  });
-
-  it("reads the sample fixture via content streams without pdf.js", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve } = await import("node:path");
+  it("reads page text from compressed content streams", async () => {
     const { loadPagesFromContentStreams, textFromPdfContentStreams } = await import(
       "../src/domain/pdfPages"
     );
-    const bytes = readFileSync(resolve("fixtures/custara-multi-5.pdf"));
+    const bytes = await twoInvoicePdf();
     const text = textFromPdfContentStreams(bytes);
-    assert.match(text, /MULTI-5001/);
-    assert.match(text, /Northwind Labs LLC/);
-    const pages = loadPagesFromContentStreams(bytes, 5);
-    assert.equal(pages.pages.length, 5);
-    assert.match(pages.pages[0].text, /MULTI-5001/);
-    assert.match(pages.pages[4].text, /MULTI-5005/);
+    assert.match(text, /INV-1001/);
+    assert.match(text, /Acme Corp/);
+    const pages = loadPagesFromContentStreams(bytes, 2);
+    assert.equal(pages.pages.length, 2);
+    assert.match(pages.pages[0].text, /INV-1001/);
+    assert.match(pages.pages[1].text, /INV-2002/);
   });
 
-  it("still reads pages when Promise.withResolvers is missing (Vercel Node 20)", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve } = await import("node:path");
+  it("still reads pages when Promise.withResolvers is missing", async () => {
     const { loadWithPdfJs } = await import("../src/domain/pdfPages");
     const original = Promise.withResolvers;
     Object.defineProperty(Promise, "withResolvers", {
@@ -129,10 +117,10 @@ describe("splitMultiInvoicePdf", () => {
     });
     delete (Promise as { withResolvers?: unknown }).withResolvers;
     try {
-      const bytes = readFileSync(resolve("fixtures/custara-multi-5.pdf"));
+      const bytes = await twoInvoicePdf();
       const loaded = await loadWithPdfJs(bytes);
-      assert.equal(loaded.total, 5);
-      assert.match(loaded.text, /MULTI-5001/);
+      assert.equal(loaded.total, 2);
+      assert.match(loaded.text, /INV-1001/);
     } finally {
       Object.defineProperty(Promise, "withResolvers", {
         value: original,
@@ -142,4 +130,3 @@ describe("splitMultiInvoicePdf", () => {
     }
   });
 });
-

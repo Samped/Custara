@@ -2,8 +2,6 @@
 
 Checklist from ingest through payment and reconcile. Run it against a disposable database after `npm run db:seed`, with Redis, `npm run worker`, and the application running.
 
-Generate fixtures with `npm run fixtures:generate`. Pay-ready local files (gitignored) come from `npm run fixtures:pay-ready`.
-
 The seed command creates a demo workspace and prints an API key. Do not seed a database that holds a production workspace.
 
 | Email | Role |
@@ -31,11 +29,11 @@ The seed command creates a demo workspace and prints an API key. Do not seed a d
 | inv_dup_005 | `duplicate_suspected` |
 | inv_arc_usdc_006 | `needs_review` (`destination_not_allowlisted`) |
 
-## 3. PDF upload
+## 3. Inbox upload
 
 1. Sign in as admin and open `/app/inbox`.
-2. Upload `fixtures/invoices/happy-ngn.pdf`. Detail shows vendor **Northern Haulage Ltd**, amount 42000.
-3. Upload `fixtures/invoices/new-vendor.pdf`. Status is `needs_review` with risk `new_vendor`.
+2. Upload `fixtures/invoices/low-confidence.json`. Status is `needs_review` with a confidence hold.
+3. Upload a supplier PDF from your own files and confirm extract + policy run.
 
 ## 4. CSV bulk
 
@@ -86,10 +84,8 @@ curl -s https://custara.xyz/api/v1/erp/ingest -H "Authorization: Bearer $KEY" \
 
 Requires Circle credentials, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN` for the deployment, and a funded Circle agent wallet. A test network also requires `ARC_ALLOW_LIVE_ON_TESTNET=true`.
 
-`npm run fixtures:pay-ready` writes `test-fixtures/pay-ready/agent-pay-usdc.pdf`.
-
 1. Set payment mode to live. Provision the Circle agent, fund it with USDC, and sync.
-2. Upload the pay-ready file and confirm the destination. The address must be on the allowlist.
+2. Ingest a USDC invoice with an Arc destination, then confirm the destination is on the allowlist.
 3. Clear review until the invoice is `approved`.
 4. Initiate payment. MFA applies at or above the organization threshold.
 5. The worker runs `arc_transfer`. The payment mode is `live` and `txHash` is the Circle transaction hash.
@@ -98,7 +94,7 @@ Automated coverage: `E2E=1 npm run test:e2e`. The Arc file skips when Circle cre
 
 ## 12. Nigeria export
 
-After `npm run fixtures:pay-ready`, use `test-fixtures/pay-ready/export-pay-ngn.pdf` on an approved NGN invoice with no Arc endpoint.
+Use an approved NGN invoice with no Arc endpoint.
 
 1. Initiate payment.
 2. The intent rail is `nigeria_sandbox` and the status is exported.
@@ -123,7 +119,6 @@ WhatsApp webhook delivery, live Xero and QuickBooks OAuth, and production Circle
 ## Commands
 
 ```bash
-npm run fixtures:generate
 npm run db:up
 npx prisma db push && npm run db:seed
 npm run worker

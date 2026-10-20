@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import type { SessionUser } from "@/lib/auth";
 import { sha256 } from "@/lib/crypto";
 import { InvoiceConflictError, ingestInvoice } from "@/domain/ingest";
+import { extractFromText } from "@/domain/extract";
 import { runInvoicePipeline } from "@/domain/pipeline";
 import { splitMultiInvoicePdf } from "@/domain/splitMultiInvoicePdf";
 
@@ -27,6 +28,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+function fieldsFromPageText(pageText?: string): Record<string, unknown> | null {
+  if (!pageText?.trim()) return null;
+  const extracted = extractFromText(pageText);
+  if (!extracted || extracted.totalAmount <= 0) return null;
+  return {
+    vendorName: extracted.vendorName,
+    invoiceNumber: extracted.invoiceNumber,
+    issueDate: extracted.issueDate,
+    dueDate: extracted.dueDate,
+    currency: extracted.currency,
+    subtotal: extracted.subtotal,
+    taxAmount: extracted.taxAmount,
+    totalAmount: extracted.totalAmount,
+    poNumber: extracted.poNumber,
+    accountName: extracted.accountName,
+    accountNumber: extracted.accountNumber,
+    bankName: extracted.bankName,
+    bankCode: extracted.bankCode,
+    arcAddress: extracted.arcAddress,
+    lineItems: extracted.lineItems,
+    confidence: Math.max(extracted.confidence, 0.85),
+  };
+}
+
 async function ingestAndAnalyze(input: {
   organizationId: string;
   actorId: string;
@@ -35,6 +60,7 @@ async function ingestAndAnalyze(input: {
   filename: string;
   mimeType: string;
   bytes: Buffer;
+  structuredPayload?: Record<string, unknown> | null;
   externalId?: string | null;
   sourceBatchId?: string | null;
   sourceSegmentIndex?: number | null;
@@ -52,6 +78,7 @@ async function ingestAndAnalyze(input: {
       filename: input.filename,
       mimeType: input.mimeType,
       bytes: input.bytes,
+      structuredPayload: input.structuredPayload,
       externalId: input.externalId,
       sourceBatchId: input.sourceBatchId,
       sourceSegmentIndex: input.sourceSegmentIndex,
@@ -109,7 +136,8 @@ export async function processInvoiceUpload(
   if (isPdf && !isJson) {
     let children: Awaited<ReturnType<typeof splitMultiInvoicePdf>> = null;
     try {
-      children = await withTimeout(splitMultiInvoicePdf(bytes, file.name), 25_000, "Multi-invoice split");
+      // pdf.js fallback can be slower on cold start; keep under Vercel maxDuration.
+      children = await withTimeout(splitMultiInvoicePdf(bytes, file.name), 45_000, "Multi-invoice split");
     } catch (err) {
       console.warn("[custara] multi-invoice split skipped", err instanceof Error ? err.message : err);
       children = null;
@@ -127,6 +155,7 @@ export async function processInvoiceUpload(
           filename: child.filename,
           mimeType: "application/pdf",
           bytes: child.bytes,
+          structuredPayload: fieldsFromPageText(child.pageText),
           externalId: `${batchId}:seg:${child.index}`,
           sourceBatchId: batchId,
           sourceSegmentIndex: child.index,
@@ -187,6 +216,7 @@ export async function processPdfInvoiceBytes(input: {
         filename: child.filename,
         mimeType: "application/pdf",
         bytes: child.bytes,
+        structuredPayload: fieldsFromPageText(child.pageText),
         externalId: input.externalId
           ? `${input.externalId}:seg:${child.index}`
           : `${batchId}:seg:${child.index}`,

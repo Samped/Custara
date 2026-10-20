@@ -81,8 +81,24 @@ describe("splitMultiInvoicePdf", () => {
     assert.ok(children![0].bytes.byteLength > 0);
     assert.ok(children![1].bytes.byteLength > 0);
     assert.notEqual(children![0].bytes.equals(children![1].bytes), true);
+    assert.match(children![0].pageText || "", /INV-1001/);
+    assert.match(children![1].pageText || "", /INV-2002/);
+    assert.equal(children![0].invoiceNumber, "INV-1001");
+    assert.equal(children![1].invoiceNumber, "INV-2002");
 
     const again = await PDFDocument.load(children![0].bytes);
     assert.equal(again.getPageCount(), 1);
   });
+
+  it("splits the five-invoice sample fixture and keeps page text for extract", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const bytes = readFileSync(resolve("fixtures/custara-multi-5.pdf"));
+    const children = await splitMultiInvoicePdf(bytes, "custara-multi-5.pdf");
+    assert.ok(children);
+    assert.equal(children!.length, 5);
+    assert.match(children![0].pageText || "", /MULTI-5001/);
+    assert.match(children![4].pageText || "", /MULTI-5005/);
+  });
 });
+

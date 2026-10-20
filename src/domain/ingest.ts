@@ -90,14 +90,33 @@ export async function ingestInvoice(input: {
     throw error;
   }
 
-  if (input.bytes && input.filename) {
-    const org = await prisma.organization.findUniqueOrThrow({
-      where: { id: input.organizationId },
-    });
-    const retainedUntil = org.privacyMode
+  const org =
+    input.bytes || input.structuredPayload
+      ? await prisma.organization.findUniqueOrThrow({ where: { id: input.organizationId } })
+      : null;
+  const retainedUntil =
+    org && org.privacyMode
       ? new Date(Date.now() + org.privacyDeleteDays * 24 * 60 * 60 * 1000)
       : null;
 
+  // JSON first so extract prefers structured fields when PDF re-read fails on serverless.
+  if (input.structuredPayload) {
+    const payload = Buffer.from(JSON.stringify(input.structuredPayload, null, 2), "utf8");
+    await prisma.invoiceDocument.create({
+      data: {
+        invoiceId: invoice.id,
+        filename: "invoice.json",
+        mimeType: "application/json",
+        storagePath: `db/${invoice.id}/invoice.json`,
+        content: payload,
+        byteSize: payload.length,
+        checksumSha256: sha256(payload),
+        retainedUntil,
+      },
+    });
+  }
+
+  if (input.bytes && input.filename) {
     await prisma.invoiceDocument.create({
       data: {
         invoiceId: invoice.id,
@@ -108,21 +127,6 @@ export async function ingestInvoice(input: {
         byteSize: input.bytes.length,
         checksumSha256: sha256(input.bytes),
         retainedUntil,
-      },
-    });
-  }
-
-  if (input.structuredPayload) {
-    const payload = Buffer.from(JSON.stringify(input.structuredPayload, null, 2), "utf8");
-    await prisma.invoiceDocument.create({
-      data: {
-        invoiceId: invoice.id,
-        filename: input.filename || "invoice.json",
-        mimeType: "application/json",
-        storagePath: `db/${invoice.id}/invoice.json`,
-        content: payload,
-        byteSize: payload.length,
-        checksumSha256: sha256(payload),
       },
     });
   }

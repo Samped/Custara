@@ -1,10 +1,8 @@
-import { createRequire } from "node:module";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { getObject } from "@/lib/storage";
 import { prisma } from "@/lib/db";
 import { extractionSchema, type Extraction } from "@/lib/types";
 import { encryptField, last4 } from "@/lib/crypto";
+import { extractPdfText as extractPdfTextFromPages } from "@/domain/pdfPages";
 
 function parseLooseJson(text: string): Record<string, unknown> | null {
   try {
@@ -465,40 +463,8 @@ export function textFromPdfLiterals(buf: Buffer): string {
   return lines.join("\n");
 }
 
-function pdfWorkerSrc(): string | undefined {
-  try {
-    const requireFromRoot = createRequire(path.join(process.cwd(), "package.json"));
-    return pathToFileURL(requireFromRoot.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")).href;
-  } catch {
-    return undefined;
-  }
-}
-
 async function extractPdfText(buf: Buffer): Promise<string> {
-  let parsed = "";
-  try {
-    const bytes = new Uint8Array(buf.byteLength);
-    bytes.set(buf);
-    // Native import so Node loads the server build, not the browser build.
-    const mod = await import(/* webpackIgnore: true */ "pdf-parse");
-    const PDFParse = (
-      mod as {
-        PDFParse?: (new (opts: { data: Uint8Array }) => {
-          getText: () => Promise<{ text?: string }>;
-          destroy?: () => Promise<void>;
-        }) & { setWorker?: (src?: string) => string };
-      }
-    ).PDFParse;
-    if (!PDFParse) throw new Error("pdf-parse PDFParse export missing");
-    const worker = pdfWorkerSrc();
-    if (worker) PDFParse.setWorker?.(worker);
-    const parser = new PDFParse({ data: bytes });
-    const result = await parser.getText();
-    parsed = (result?.text || "").trim();
-    await parser.destroy?.();
-  } catch (err) {
-    console.warn("[custara] extractPdfText failed", err instanceof Error ? err.message : err);
-  }
+  const parsed = (await extractPdfTextFromPages(buf)).trim();
   if (parsed.replace(/\s/g, "").length >= 40) return parsed;
   const literals = textFromPdfLiterals(buf);
   return literals.length > parsed.length ? literals : parsed || literals;
@@ -523,6 +489,12 @@ export async function extractInvoice(invoiceId: string): Promise<Extraction> {
   const docs = await prisma.invoiceDocument.findMany({
     where: { invoiceId, deletedAt: null },
     orderBy: { createdAt: "asc" },
+  });
+  // Prefer structured JSON (written first on multi-invoice splits) over PDF re-parse.
+  docs.sort((a, b) => {
+    const aJson = a.mimeType.includes("json") || a.filename.endsWith(".json") ? 0 : 1;
+    const bJson = b.mimeType.includes("json") || b.filename.endsWith(".json") ? 0 : 1;
+    return aJson - bJson;
   });
 
   let extraction: Extraction | null = null;

@@ -1,7 +1,5 @@
-import { createRequire } from "node:module";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { PDFDocument } from "pdf-lib";
+import { loadPdfPages, type PageText } from "@/domain/pdfPages";
 
 export type InvoiceSegment = {
   pageStart: number;
@@ -16,110 +14,11 @@ export type SplitChildPdf = {
   pageEnd: number;
   filename: string;
   bytes: Buffer;
+  /** Per-segment text captured during split (used when child PDF re-read fails on serverless). */
+  pageText?: string;
   invoiceNumber?: string | null;
   vendorName?: string | null;
 };
-
-type PageText = { num: number; text: string };
-
-function pdfWorkerSrc(): string | undefined {
-  try {
-    const requireFromRoot = createRequire(path.join(process.cwd(), "package.json"));
-    return pathToFileURL(requireFromRoot.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")).href;
-  } catch {
-    return undefined;
-  }
-}
-
-type PdfParseCtor = (new (opts: { data: Uint8Array }) => {
-  getText: (params?: { partial?: number[] }) => Promise<{ text?: string; pages?: PageText[]; total?: number }>;
-  destroy?: () => Promise<void>;
-}) & { setWorker?: (src?: string) => string };
-
-async function openPdfParse(buf: Buffer) {
-  const bytes = new Uint8Array(buf.byteLength);
-  bytes.set(buf);
-  const mod = await import(/* webpackIgnore: true */ "pdf-parse");
-  const PDFParse = (mod as { PDFParse?: PdfParseCtor }).PDFParse;
-  if (!PDFParse) throw new Error("pdf-parse PDFParse export missing");
-  const worker = pdfWorkerSrc();
-  if (worker) PDFParse.setWorker?.(worker);
-  return new PDFParse({ data: bytes });
-}
-
-async function loadPdfPagesWithPdfParse(
-  buf: Buffer,
-): Promise<{ pages: PageText[]; total: number; text: string }> {
-  const parser = await openPdfParse(buf);
-  try {
-    const result = await parser.getText();
-    const pages = (result.pages || []).map((p) => ({
-      num: p.num,
-      text: (p.text || "").trim(),
-    }));
-    return {
-      pages: pages.length ? pages : [{ num: 1, text: (result.text || "").trim() }],
-      total: result.total || pages.length || 1,
-      text: (result.text || "").trim(),
-    };
-  } finally {
-    await parser.destroy?.();
-  }
-}
-
-/** Read each page from the original PDF (no re-encode). Works when whole-doc page text is empty. */
-async function loadPdfPagesByPartial(
-  buf: Buffer,
-  totalHint?: number,
-): Promise<{ pages: PageText[]; total: number; text: string }> {
-  let total = totalHint || 0;
-  if (!total) {
-    const src = await PDFDocument.load(buf, { ignoreEncryption: true });
-    total = src.getPageCount();
-  }
-  const parser = await openPdfParse(buf);
-  const pages: PageText[] = [];
-  try {
-    for (let num = 1; num <= total; num += 1) {
-      const result = await parser.getText({ partial: [num] });
-      const text =
-        (result.pages || []).map((p) => p.text || "").join("\n").trim() ||
-        (result.text || "").trim();
-      pages.push({ num, text });
-    }
-  } finally {
-    await parser.destroy?.();
-  }
-  return { pages, total, text: pages.map((p) => p.text).join("\n\n") };
-}
-
-async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; total: number; text: string }> {
-  try {
-    const parsed = await loadPdfPagesWithPdfParse(buf);
-    const nonEmpty = parsed.pages.filter((p) => p.text.replace(/\s/g, "").length >= 8).length;
-    if (parsed.total >= 2 && nonEmpty >= 2) return parsed;
-
-    // Serverless often returns page shells with no text, or one merged blob.
-    if (parsed.total >= 2 || countDistinctInvoiceNumbers(parsed.text) >= 2) {
-      const total =
-        parsed.total >= 2
-          ? parsed.total
-          : (await PDFDocument.load(buf, { ignoreEncryption: true })).getPageCount();
-      if (total >= 2) {
-        const partial = await loadPdfPagesByPartial(buf, total);
-        const partialNonEmpty = partial.pages.filter((p) => p.text.replace(/\s/g, "").length >= 8).length;
-        if (partialNonEmpty >= 2) return partial;
-      }
-    }
-    return parsed;
-  } catch (err) {
-    console.warn("[custara] pdf-parse page load failed", err instanceof Error ? err.message : err);
-    const src = await PDFDocument.load(buf, { ignoreEncryption: true });
-    const total = src.getPageCount();
-    if (total < 2) return { pages: [{ num: 1, text: "" }], total: 1, text: "" };
-    return loadPdfPagesByPartial(buf, total);
-  }
-}
 
 function pageInvoiceNumber(text: string): string | null {
   return (
@@ -224,6 +123,8 @@ async function maybeLlmSegments(pages: PageText[], text: string): Promise<Invoic
   if (!key) return null;
   if (pages.length < 2) return null;
   if (countDistinctInvoiceNumbers(text) < 2 && pages.length < 3) return null;
+  // Need some text — blind LLM calls burn the upload budget on Vercel.
+  if (text.replace(/\s/g, "").length < 40) return null;
 
   const pageOutline = pages
     .map((p) => `--- page ${p.num} ---\n${p.text.slice(0, 1200)}`)
@@ -250,7 +151,8 @@ async function maybeLlmSegments(pages: PageText[], text: string): Promise<Invoic
           { role: "user", content: pageOutline },
         ],
       }),
-      signal: AbortSignal.timeout(25000),
+      // Keep short so the outer upload timeout still has room to build child PDFs.
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const body = (await res.json()) as {
@@ -297,6 +199,14 @@ function baseName(filename: string): string {
   return filename.replace(/\.pdf$/i, "") || "invoice";
 }
 
+function segmentText(pages: PageText[], pageStart: number, pageEnd: number): string {
+  return pages
+    .filter((p) => p.num >= pageStart && p.num <= pageEnd)
+    .map((p) => p.text)
+    .join("\n\n")
+    .trim();
+}
+
 /**
  * If the PDF clearly contains 2+ invoices, return one child PDF per invoice.
  * Otherwise return null so the caller keeps the single-invoice path.
@@ -323,10 +233,12 @@ export async function splitMultiInvoicePdf(
     if (llm && llm.length >= 2) segments = llm;
   }
 
-  // Last resort on multi-page packs: one invoice per page when each page looks like a bill.
+  // Multi-page packs: one invoice per page when each page looks like a bill, or
+  // when we see 2+ distinct invoice numbers even if page shells were incomplete.
   if (segments.length < 2 && pages.length >= 2) {
-    const perPage = pages.filter((p) => looksLikeInvoiceStart(p.text) || pageInvoiceNumber(p.text));
-    if (perPage.length >= 2) {
+    const marked = pages.filter((p) => looksLikeInvoiceStart(p.text) || pageInvoiceNumber(p.text));
+    const distinct = countDistinctInvoiceNumbers(text);
+    if (marked.length >= 2 || distinct >= 2) {
       segments = pages.map((p) => ({
         pageStart: p.num,
         pageEnd: p.num,
@@ -357,14 +269,16 @@ export async function splitMultiInvoicePdf(
   for (let i = 0; i < segments.length; i += 1) {
     const seg = segments[i];
     const bytes = await buildChildPdf(buf, seg.pageStart, seg.pageEnd);
+    const pageText = segmentText(pages, seg.pageStart, seg.pageEnd);
     children.push({
       index: i + 1,
       pageStart: seg.pageStart,
       pageEnd: seg.pageEnd,
       filename: `${stem}-inv-${i + 1}.pdf`,
       bytes,
-      invoiceNumber: seg.invoiceNumber,
-      vendorName: seg.vendorName,
+      pageText: pageText || undefined,
+      invoiceNumber: seg.invoiceNumber || pageInvoiceNumber(pageText),
+      vendorName: seg.vendorName || pageVendorHint(pageText),
     });
   }
   return children;

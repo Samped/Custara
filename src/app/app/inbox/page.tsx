@@ -12,7 +12,14 @@ import { ensureMailboxConnector } from "@/domain/mailbox";
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulk?: string; failed?: string; mailbox?: string; upload?: string; msg?: string }>;
+  searchParams: Promise<{
+    bulk?: string;
+    failed?: string;
+    split?: string;
+    mailbox?: string;
+    upload?: string;
+    msg?: string;
+  }>;
 }) {
   let user;
   try {
@@ -46,7 +53,9 @@ export default async function InboxPage({
       <div className="dash">
         {params.bulk ? (
           <p className="dash-sub">
-            Bulk ingest: {params.bulk} created
+            {params.split === "1"
+              ? `Split into ${params.bulk} invoices from one PDF`
+              : `Bulk ingest: ${params.bulk} created`}
             {params.failed && Number(params.failed) > 0 ? ` · ${params.failed} failed` : ""}
           </p>
         ) : null}
@@ -122,6 +131,9 @@ export default async function InboxPage({
                     <Link href={`/app/invoices/${invoice.id}`} className="dash-row-title">
                       {invoice.invoiceNumber || invoice.id.slice(0, 10)}
                     </Link>
+                    {invoice.sourceBatchId ? (
+                      <p className="dash-mini-meta mt-1">Upload batch</p>
+                    ) : null}
                   </td>
                   <td>{invoice.vendor?.name || "—"}</td>
                   <td>{formatMoney(invoice.totalAmount, invoice.currency)}</td>

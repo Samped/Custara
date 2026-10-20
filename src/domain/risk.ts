@@ -80,6 +80,15 @@ export async function assessRisks(
     });
   }
 
+  const self = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { sourceBatchId: true },
+  });
+  const siblingBatch = self?.sourceBatchId || null;
+  const notSibling = siblingBatch
+    ? { OR: [{ sourceBatchId: null }, { sourceBatchId: { not: siblingBatch } }] }
+    : {};
+
   const duplicate = await prisma.invoice.findFirst({
     where: {
       organizationId,
@@ -87,6 +96,7 @@ export async function assessRisks(
       invoiceNumber: extraction.invoiceNumber,
       vendorId: vendor.id,
       status: { notIn: ["rejected"] },
+      ...notSibling,
     },
   });
 
@@ -117,7 +127,13 @@ export async function assessRisks(
         checksumSha256: doc.checksumSha256,
         deletedAt: null,
         invoiceId: { not: invoiceId },
-        invoice: { organizationId, status: { notIn: ["rejected"] } },
+        invoice: {
+          organizationId,
+          status: { notIn: ["rejected"] },
+          ...(siblingBatch
+            ? { OR: [{ sourceBatchId: null }, { sourceBatchId: { not: siblingBatch } }] }
+            : {}),
+        },
       },
       select: { invoiceId: true, filename: true },
     });
@@ -148,6 +164,7 @@ export async function assessRisks(
           ? { dueDate: { gte: windowStart, lte: windowEnd } }
           : {}),
         invoiceNumber: { not: extraction.invoiceNumber },
+        ...notSibling,
       },
     });
     if (fuzzy) {

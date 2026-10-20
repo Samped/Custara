@@ -41,6 +41,8 @@ export async function ingestInvoice(input: {
   structuredPayload?: Record<string, unknown> | null;
   requestId?: string;
   enqueue?: boolean;
+  sourceBatchId?: string | null;
+  sourceSegmentIndex?: number | null;
 }) {
   await ensureStorage();
 
@@ -68,6 +70,8 @@ export async function ingestInvoice(input: {
         source: input.source,
         status: "received",
         requestId: input.requestId || null,
+        sourceBatchId: input.sourceBatchId || null,
+        sourceSegmentIndex: input.sourceSegmentIndex ?? null,
       },
     });
   } catch (error) {

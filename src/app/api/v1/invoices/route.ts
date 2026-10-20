@@ -48,11 +48,55 @@ export async function POST(request: Request) {
       document?: Record<string, unknown>;
       sync?: boolean;
       idempotency_key?: string;
+      /** Base64 PDF bytes — multi-invoice packs are split into separate invoices. */
+      pdf_base64?: string;
+      filename?: string;
+      content_base64?: string;
     };
 
     const idempotencyKey = request.headers.get("idempotency-key") || body.idempotency_key || null;
+    const pdfB64 = body.pdf_base64 || body.content_base64 || null;
+    const pdfName = (body.filename || `${body.external_id || "api"}-invoice.pdf`).toLowerCase();
+    const isPdfUpload = Boolean(pdfB64 && (pdfName.endsWith(".pdf") || body.pdf_base64));
 
     const run = async () => {
+      if (isPdfUpload && pdfB64) {
+        const { processPdfInvoiceBytes } = await import("@/domain/uploadInvoice");
+        const bytes = Buffer.from(pdfB64, "base64");
+        const result = await processPdfInvoiceBytes({
+          organizationId: auth.organizationId,
+          actorType: "api_key",
+          actorId: auth.apiKeyId,
+          filename: body.filename || `${body.external_id || "api"}-invoice.pdf`,
+          bytes,
+          sync: Boolean(body.sync),
+          externalId: body.external_id || null,
+          requestId,
+        });
+        const invoices = await prisma.invoice.findMany({
+          where: { id: { in: result.ids }, organizationId: auth.organizationId },
+          select: { id: true, status: true, externalId: true },
+        });
+        return {
+          status: 201,
+          body: {
+            id: invoices[0]?.id || result.ids[0],
+            status: invoices[0]?.status || "received",
+            external_id: invoices[0]?.externalId || null,
+            ids: result.ids,
+            split: result.split,
+            count: result.ids.length,
+            invoices: invoices.map((row) => ({
+              id: row.id,
+              status: row.status,
+              external_id: row.externalId,
+            })),
+            request_id: requestId,
+            async: !body.sync,
+          },
+        };
+      }
+
       const invoice = await ingestInvoice({
         organizationId: auth.organizationId,
         actorType: "api_key",
@@ -82,6 +126,16 @@ export async function POST(request: Request) {
           id: refreshed.id,
           status: refreshed.status,
           external_id: refreshed.externalId,
+          ids: [refreshed.id],
+          split: false,
+          count: 1,
+          invoices: [
+            {
+              id: refreshed.id,
+              status: refreshed.status,
+              external_id: refreshed.externalId,
+            },
+          ],
           request_id: requestId,
           async: !body.sync,
         },

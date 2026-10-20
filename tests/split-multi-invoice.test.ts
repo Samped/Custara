@@ -101,6 +101,22 @@ describe("splitMultiInvoicePdf", () => {
     assert.match(children![4].pageText || "", /MULTI-5005/);
   });
 
+  it("reads the sample fixture via content streams without pdf.js", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const { loadPagesFromContentStreams, textFromPdfContentStreams } = await import(
+      "../src/domain/pdfPages"
+    );
+    const bytes = readFileSync(resolve("fixtures/custara-multi-5.pdf"));
+    const text = textFromPdfContentStreams(bytes);
+    assert.match(text, /MULTI-5001/);
+    assert.match(text, /Northwind Labs LLC/);
+    const pages = loadPagesFromContentStreams(bytes, 5);
+    assert.equal(pages.pages.length, 5);
+    assert.match(pages.pages[0].text, /MULTI-5001/);
+    assert.match(pages.pages[4].text, /MULTI-5005/);
+  });
+
   it("still reads pages when Promise.withResolvers is missing (Vercel Node 20)", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");

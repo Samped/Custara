@@ -1,11 +1,136 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import zlib from "node:zlib";
 import { PDFDocument } from "pdf-lib";
 
 export type PageText = { num: number; text: string };
 
 const requireFromRoot = createRequire(path.join(process.cwd(), "package.json"));
+
+/** Decode PDF text operators from one inflated content stream. */
+function textFromContentOperators(content: string): string {
+  const lines: string[] = [];
+  for (const m of content.matchAll(/<([0-9A-Fa-f\s]+)>\s*Tj/g)) {
+    const hex = m[1].replace(/\s+/g, "");
+    if (hex.length < 2 || hex.length % 2 !== 0) continue;
+    try {
+      const decoded = Buffer.from(hex, "hex").toString("utf8");
+      if (decoded.replace(/\s/g, "").length >= 1) lines.push(decoded);
+    } catch {
+      /* ignore bad hex */
+    }
+  }
+  for (const m of content.matchAll(/\((?:\\.|[^\\)])*\)\s*Tj/g)) {
+    const close = m[0].lastIndexOf(")");
+    const inner = m[0].slice(1, close);
+    const decoded = inner.replace(/\\([nrt\\()])/g, (_, c: string) => {
+      if (c === "n") return "\n";
+      if (c === "r") return "\r";
+      if (c === "t") return "\t";
+      return c;
+    });
+    if (decoded.replace(/\s/g, "").length >= 1) lines.push(decoded);
+  }
+  return lines.join("\n").trim();
+}
+
+/**
+ * Pure Node PDF text: inflate FlateDecode streams and read `<hex> Tj` / `(…) Tj`.
+ * Works on Vercel without pdf.js (labeled pdf-lib invoices use hex strings).
+ */
+export function textFromPdfContentStreams(buf: Buffer): string {
+  return loadPagesFromContentStreams(buf).text;
+}
+
+function inflatePdfStreams(buf: Buffer): string[] {
+  const raw = buf.toString("latin1");
+  const chunks: string[] = [];
+  let idx = 0;
+  while (true) {
+    const start = raw.indexOf("stream", idx);
+    if (start < 0) break;
+    let bodyStart = start + 6;
+    if (raw[bodyStart] === "\r") bodyStart += 1;
+    if (raw[bodyStart] === "\n") bodyStart += 1;
+    const end = raw.indexOf("endstream", bodyStart);
+    if (end < 0) break;
+    let body = Buffer.from(raw.slice(bodyStart, end), "latin1");
+    if (body[body.length - 1] === 0x0a) body = body.subarray(0, body.length - 1);
+    if (body[body.length - 1] === 0x0d) body = body.subarray(0, body.length - 1);
+    let inflated: Buffer | null = null;
+    try {
+      inflated = zlib.inflateSync(body);
+    } catch {
+      try {
+        inflated = zlib.inflateRawSync(body);
+      } catch {
+        inflated = null;
+      }
+    }
+    chunks.push((inflated || body).toString("latin1"));
+    idx = end + 9;
+  }
+  return chunks;
+}
+
+function looksLikeInvoiceText(text: string): boolean {
+  return (
+    text.replace(/\s/g, "").length >= 20 &&
+    (/Vendor\s*:/i.test(text) ||
+      /Invoice\s*(?:Number|No\.?|#|ID)/i.test(text) ||
+      /Total\s*(?:Due|Amount)?\s*:/i.test(text) ||
+      /\binvoice\b/i.test(text))
+  );
+}
+
+/** Per-page text from content streams (no pdf.js). */
+export function loadPagesFromContentStreams(
+  buf: Buffer,
+  pageCountHint = 0,
+): { pages: PageText[]; total: number; text: string } {
+  const streamTexts = inflatePdfStreams(buf)
+    .map(textFromContentOperators)
+    .filter((t) => t.replace(/\s/g, "").length >= 8);
+  const invoiceStreams = streamTexts.filter(looksLikeInvoiceText);
+  const usable = invoiceStreams.length >= 1 ? invoiceStreams : streamTexts;
+  const total = pageCountHint || usable.length || 1;
+
+  if (usable.length >= 2 && (usable.length === total || pageCountHint === 0)) {
+    const pages = usable.map((text, i) => ({ num: i + 1, text }));
+    return { pages, total: pages.length, text: pages.map((p) => p.text).join("\n\n") };
+  }
+
+  if (usable.length === 1) {
+    return {
+      pages: [{ num: 1, text: usable[0] }],
+      total: Math.max(1, pageCountHint || 1),
+      text: usable[0],
+    };
+  }
+
+  if (usable.length > 1 && pageCountHint >= 2 && usable.length !== pageCountHint) {
+    // Prefer invoice-looking streams aligned to page count when possible.
+    if (invoiceStreams.length === pageCountHint) {
+      const pages = invoiceStreams.map((text, i) => ({ num: i + 1, text }));
+      return { pages, total: pageCountHint, text: pages.map((p) => p.text).join("\n\n") };
+    }
+  }
+
+  const merged = usable.join("\n\n");
+  if (merged) {
+    return {
+      pages: Array.from({ length: Math.max(1, pageCountHint || 1) }, (_, i) => ({
+        num: i + 1,
+        text: i === 0 ? merged : "",
+      })),
+      total: Math.max(1, pageCountHint || 1),
+      text: merged,
+    };
+  }
+
+  return emptyPages(Math.max(1, pageCountHint || 1));
+}
 
 /** Vercel defaults to Node 20; pdf.js requires Promise.withResolvers (Node 22+). */
 function ensurePromiseWithResolvers() {
@@ -147,7 +272,7 @@ function nonEmptyCount(pages: PageText[]): number {
 
 /**
  * Load per-page text for split + extract.
- * Order: pdf.js (createRequire) → pdf-parse → empty page shells from pdf-lib (never throws).
+ * Order: content-stream inflate (Vercel-safe) → pdf.js → pdf-parse → empty shells.
  */
 export async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; total: number; text: string }> {
   ensurePromiseWithResolvers();
@@ -158,7 +283,14 @@ export async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; to
     pageCountHint = 0;
   }
 
-  // Prefer pdf.js first on serverless — pdf-parse wraps the same engine and often fails first.
+  // Pure Node first — no pdf.js worker / Promise.withResolvers dependency.
+  try {
+    const fromStreams = loadPagesFromContentStreams(buf, pageCountHint);
+    if (nonEmptyCount(fromStreams.pages) >= 1) return fromStreams;
+  } catch (err) {
+    console.warn("[custara] content-stream page load failed", err instanceof Error ? err.message : err);
+  }
+
   try {
     const viaJs = await loadWithPdfJs(buf);
     if (nonEmptyCount(viaJs.pages) >= 1 || viaJs.total >= 2) return viaJs;
@@ -180,6 +312,14 @@ export async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; to
 /** Full-document text for invoice extract (same fallbacks as page load). */
 export async function extractPdfText(buf: Buffer): Promise<string> {
   ensurePromiseWithResolvers();
+
+  try {
+    const fromStreams = textFromPdfContentStreams(buf).trim();
+    if (fromStreams.replace(/\s/g, "").length >= 8) return fromStreams;
+  } catch (err) {
+    console.warn("[custara] extractPdfText content-stream failed", err instanceof Error ? err.message : err);
+  }
+
   try {
     const viaJs = await loadWithPdfJs(buf);
     if (viaJs.text.replace(/\s/g, "").length >= 8) return viaJs.text;

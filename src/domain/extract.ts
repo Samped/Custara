@@ -458,7 +458,11 @@ export async function resolveChildExtractionFields(input: {
   if (text.replace(/\s/g, "").length < 8) {
     text = (await extractPdfText(input.bytes)).trim();
   }
-  if (!text) {
+  if (text.replace(/\s/g, "").length < 8) {
+    const { textFromPdfContentStreams } = await import("@/domain/pdfPages");
+    text = textFromPdfContentStreams(input.bytes).trim();
+  }
+  if (text.replace(/\s/g, "").length < 8) {
     text = textFromPdfLiterals(input.bytes).trim();
   }
 

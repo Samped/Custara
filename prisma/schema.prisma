@@ -322,6 +322,9 @@ model Invoice {
   explanation      String?
   policyVersionId  String?
   requestId        String?
+  /// Shared id for child invoices split from one multi-invoice PDF upload.
+  sourceBatchId    String?
+  sourceSegmentIndex Int?
   recommendedPayDate DateTime?
   payTimingReason  String?
   createdAt        DateTime  @default(now())
@@ -339,6 +342,7 @@ model Invoice {
   @@index([organizationId, status])
   @@index([organizationId, invoiceNumber])
   @@index([organizationId, recommendedPayDate])
+  @@index([organizationId, sourceBatchId])
   @@unique([organizationId, externalId])
 }
 

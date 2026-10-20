@@ -9,7 +9,22 @@ const nextConfig: NextConfig = {
       "./node_modules/pdfjs-dist/**/*",
       "./node_modules/pdf-lib/**/*",
     ],
+    "/app/api/app/upload-invoice": [
+      "./node_modules/pdf-parse/**/*",
+      "./node_modules/pdfjs-dist/**/*",
+      "./node_modules/pdf-lib/**/*",
+    ],
+    "src/app/api/app/upload-invoice/route.ts": [
+      "./node_modules/pdf-parse/**/*",
+      "./node_modules/pdfjs-dist/**/*",
+      "./node_modules/pdf-lib/**/*",
+    ],
     "/api/v1/invoices": [
+      "./node_modules/pdf-parse/**/*",
+      "./node_modules/pdfjs-dist/**/*",
+      "./node_modules/pdf-lib/**/*",
+    ],
+    "/app/api/v1/invoices": [
       "./node_modules/pdf-parse/**/*",
       "./node_modules/pdfjs-dist/**/*",
       "./node_modules/pdf-lib/**/*",

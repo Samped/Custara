@@ -31,22 +31,26 @@ function pdfWorkerSrc(): string | undefined {
   }
 }
 
-async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; total: number; text: string }> {
+type PdfParseCtor = (new (opts: { data: Uint8Array }) => {
+  getText: (params?: { partial?: number[] }) => Promise<{ text?: string; pages?: PageText[]; total?: number }>;
+  destroy?: () => Promise<void>;
+}) & { setWorker?: (src?: string) => string };
+
+async function openPdfParse(buf: Buffer) {
   const bytes = new Uint8Array(buf.byteLength);
   bytes.set(buf);
   const mod = await import(/* webpackIgnore: true */ "pdf-parse");
-  const PDFParse = (
-    mod as {
-      PDFParse?: (new (opts: { data: Uint8Array }) => {
-        getText: () => Promise<{ text?: string; pages?: PageText[]; total?: number }>;
-        destroy?: () => Promise<void>;
-      }) & { setWorker?: (src?: string) => string };
-    }
-  ).PDFParse;
+  const PDFParse = (mod as { PDFParse?: PdfParseCtor }).PDFParse;
   if (!PDFParse) throw new Error("pdf-parse PDFParse export missing");
   const worker = pdfWorkerSrc();
   if (worker) PDFParse.setWorker?.(worker);
-  const parser = new PDFParse({ data: bytes });
+  return new PDFParse({ data: bytes });
+}
+
+async function loadPdfPagesWithPdfParse(
+  buf: Buffer,
+): Promise<{ pages: PageText[]; total: number; text: string }> {
+  const parser = await openPdfParse(buf);
   try {
     const result = await parser.getText();
     const pages = (result.pages || []).map((p) => ({
@@ -60,6 +64,60 @@ async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; total: nu
     };
   } finally {
     await parser.destroy?.();
+  }
+}
+
+/** Read each page from the original PDF (no re-encode). Works when whole-doc page text is empty. */
+async function loadPdfPagesByPartial(
+  buf: Buffer,
+  totalHint?: number,
+): Promise<{ pages: PageText[]; total: number; text: string }> {
+  let total = totalHint || 0;
+  if (!total) {
+    const src = await PDFDocument.load(buf, { ignoreEncryption: true });
+    total = src.getPageCount();
+  }
+  const parser = await openPdfParse(buf);
+  const pages: PageText[] = [];
+  try {
+    for (let num = 1; num <= total; num += 1) {
+      const result = await parser.getText({ partial: [num] });
+      const text =
+        (result.pages || []).map((p) => p.text || "").join("\n").trim() ||
+        (result.text || "").trim();
+      pages.push({ num, text });
+    }
+  } finally {
+    await parser.destroy?.();
+  }
+  return { pages, total, text: pages.map((p) => p.text).join("\n\n") };
+}
+
+async function loadPdfPages(buf: Buffer): Promise<{ pages: PageText[]; total: number; text: string }> {
+  try {
+    const parsed = await loadPdfPagesWithPdfParse(buf);
+    const nonEmpty = parsed.pages.filter((p) => p.text.replace(/\s/g, "").length >= 8).length;
+    if (parsed.total >= 2 && nonEmpty >= 2) return parsed;
+
+    // Serverless often returns page shells with no text, or one merged blob.
+    if (parsed.total >= 2 || countDistinctInvoiceNumbers(parsed.text) >= 2) {
+      const total =
+        parsed.total >= 2
+          ? parsed.total
+          : (await PDFDocument.load(buf, { ignoreEncryption: true })).getPageCount();
+      if (total >= 2) {
+        const partial = await loadPdfPagesByPartial(buf, total);
+        const partialNonEmpty = partial.pages.filter((p) => p.text.replace(/\s/g, "").length >= 8).length;
+        if (partialNonEmpty >= 2) return partial;
+      }
+    }
+    return parsed;
+  } catch (err) {
+    console.warn("[custara] pdf-parse page load failed", err instanceof Error ? err.message : err);
+    const src = await PDFDocument.load(buf, { ignoreEncryption: true });
+    const total = src.getPageCount();
+    if (total < 2) return { pages: [{ num: 1, text: "" }], total: 1, text: "" };
+    return loadPdfPagesByPartial(buf, total);
   }
 }
 
@@ -265,7 +323,26 @@ export async function splitMultiInvoicePdf(
     if (llm && llm.length >= 2) segments = llm;
   }
 
-  if (segments.length < 2) return null;
+  // Last resort on multi-page packs: one invoice per page when each page looks like a bill.
+  if (segments.length < 2 && pages.length >= 2) {
+    const perPage = pages.filter((p) => looksLikeInvoiceStart(p.text) || pageInvoiceNumber(p.text));
+    if (perPage.length >= 2) {
+      segments = pages.map((p) => ({
+        pageStart: p.num,
+        pageEnd: p.num,
+        invoiceNumber: pageInvoiceNumber(p.text),
+        vendorName: pageVendorHint(p.text),
+      }));
+    }
+  }
+
+  if (segments.length < 2) {
+    console.warn("[custara] multi-invoice split found no boundaries", {
+      pages: pages.length,
+      textChars: text.length,
+    });
+    return null;
+  }
 
   // Clamp to actual page count
   const maxPage = pages[pages.length - 1]?.num || pages.length;

@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const pdfTrace = [
   "./node_modules/pdf-parse/**/*",
   "./node_modules/pdfjs-dist/**/*",
+  "./node_modules/pdfjs-dist/standard_fonts/**/*",
+  "./node_modules/pdfjs-dist/cmaps/**/*",
+  "./node_modules/pdfjs-dist/legacy/build/**/*",
   "./node_modules/pdf-lib/**/*",
 ];
 

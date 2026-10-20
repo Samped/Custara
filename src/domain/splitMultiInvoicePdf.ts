@@ -238,7 +238,16 @@ export async function splitMultiInvoicePdf(
   if (segments.length < 2 && pages.length >= 2) {
     const marked = pages.filter((p) => looksLikeInvoiceStart(p.text) || pageInvoiceNumber(p.text));
     const distinct = countDistinctInvoiceNumbers(text);
-    if (marked.length >= 2 || distinct >= 2) {
+    const noReadableText = text.replace(/\s/g, "").length < 40;
+    // On serverless, if text extraction still fails, fan out pages so each child can
+    // be vision-extracted instead of one blank UNK for the whole pack.
+    if (marked.length >= 2 || distinct >= 2 || (noReadableText && pages.length <= 20)) {
+      console.warn("[custara] multi-invoice split using one-page segments", {
+        pages: pages.length,
+        marked: marked.length,
+        distinct,
+        noReadableText,
+      });
       segments = pages.map((p) => ({
         pageStart: p.num,
         pageEnd: p.num,

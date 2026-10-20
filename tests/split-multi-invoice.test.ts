@@ -100,5 +100,30 @@ describe("splitMultiInvoicePdf", () => {
     assert.match(children![0].pageText || "", /MULTI-5001/);
     assert.match(children![4].pageText || "", /MULTI-5005/);
   });
+
+  it("still reads pages when Promise.withResolvers is missing (Vercel Node 20)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const { loadWithPdfJs } = await import("../src/domain/pdfPages");
+    const original = Promise.withResolvers;
+    Object.defineProperty(Promise, "withResolvers", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    delete (Promise as { withResolvers?: unknown }).withResolvers;
+    try {
+      const bytes = readFileSync(resolve("fixtures/custara-multi-5.pdf"));
+      const loaded = await loadWithPdfJs(bytes);
+      assert.equal(loaded.total, 5);
+      assert.match(loaded.text, /MULTI-5001/);
+    } finally {
+      Object.defineProperty(Promise, "withResolvers", {
+        value: original,
+        configurable: true,
+        writable: true,
+      });
+    }
+  });
 });
 

@@ -186,11 +186,25 @@ function extractLabeledMoney(text: string, label: RegExp): number | null {
 }
 
 function deterministicExtract(payload: Record<string, unknown>): Extraction {
-  const lineItems = Array.isArray(payload.line_items)
-    ? (payload.line_items as Extraction["lineItems"])
+  const rawLines = Array.isArray(payload.line_items)
+    ? payload.line_items
     : Array.isArray(payload.lineItems)
-      ? (payload.lineItems as Extraction["lineItems"])
+      ? payload.lineItems
       : [];
+  const lineItems = (rawLines as Array<Record<string, unknown>>).map((line) => {
+    const quantity = Number(line.quantity ?? 1) || 1;
+    const unitPrice = Number(line.unitPrice ?? line.unit_price ?? line.price_unit ?? 0) || 0;
+    const amount = Number(line.amount ?? line.price_subtotal ?? quantity * unitPrice) || 0;
+    return {
+      description: String(line.description || line.name || ""),
+      quantity,
+      unitPrice,
+      amount,
+      accountCode: line.accountCode != null ? String(line.accountCode) : null,
+      analytic: line.analytic != null ? String(line.analytic) : null,
+      product: line.product != null ? String(line.product) : null,
+    };
+  });
 
   return extractionSchema.parse({
     vendorName: String(payload.vendor_name || payload.vendorName || payload.vendor || "Unknown Vendor"),
@@ -208,7 +222,20 @@ function deterministicExtract(payload: Record<string, unknown>): Extraction {
     accountNumber: (payload.account_number || payload.accountNumber || null) as string | null,
     bankName: (payload.bank_name || payload.bankName || null) as string | null,
     bankCode: (payload.bank_code || payload.bankCode || null) as string | null,
-    arcAddress: (payload.arc_address || payload.arcAddress || null) as string | null,
+    arcAddress:
+      String(payload.arc_address || payload.arcAddress || payload.account_number || payload.accountNumber || "").match(
+        /0x[a-fA-F0-9]{40}/i,
+      )?.[0]
+        ?.toLowerCase() || null,
+    paymentMethod: (payload.payment_method || payload.paymentMethod || null) as string | null,
+    odooMoveType: (payload.move_type || payload.odooMoveType || null) as string | null,
+    odooState: (payload.odoo_state || payload.state || payload.odooState || null) as string | null,
+    odooPaymentState: (payload.payment_state || payload.odooPaymentState || null) as string | null,
+    odooResidual:
+      payload.amount_residual != null || payload.odooResidual != null
+        ? Number(payload.amount_residual ?? payload.odooResidual)
+        : null,
+    paymentTerm: (payload.payment_term || payload.paymentTerm || null) as string | null,
     lineItems,
     confidence: Number(payload.confidence ?? 0.92),
   });
@@ -440,6 +467,7 @@ function extractionToPayload(extracted: Extraction): Record<string, unknown> {
     bankName: extracted.bankName,
     bankCode: extracted.bankCode,
     arcAddress: extracted.arcAddress,
+    paymentMethod: extracted.paymentMethod,
     lineItems: extracted.lineItems,
     confidence: Math.max(extracted.confidence, 0.85),
   };
@@ -702,6 +730,11 @@ export async function extractInvoice(invoiceId: string): Promise<Extraction> {
       taxAmount: extraction.taxAmount ?? null,
       totalAmount: extraction.totalAmount,
       poNumber: extraction.poNumber || null,
+      paymentTerm: extraction.paymentTerm || undefined,
+      residualAmount:
+        extraction.odooResidual != null && Number.isFinite(extraction.odooResidual)
+          ? extraction.odooResidual
+          : extraction.totalAmount,
       issueDate: extraction.issueDate ? new Date(extraction.issueDate) : null,
       dueDate: extraction.dueDate ? new Date(extraction.dueDate) : null,
     },

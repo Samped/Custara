@@ -63,6 +63,22 @@ describe("evaluatePolicy money controls", () => {
     assert.match(result.reason, /purchase order/);
   });
 
+  it("holds a cost-center-coded bill when the policy requires analytic approval", () => {
+    const risks: RiskItem[] = [
+      { code: "analytic_approval", severity: "medium", message: "Marketing 100%" },
+    ];
+    const result = evaluatePolicy({
+      amount: 100,
+      currency: "NGN",
+      risks,
+      isNewVendor: false,
+      bankChanged: false,
+      rules: { ...PAYABLESAI_STRICT_RULES, requireAnalyticApproval: true },
+    });
+    assert.equal(result.decision, "hold");
+    assert.match(result.reason, /Cost-center/);
+  });
+
   it("holds when address screening denies the destination", () => {
     const risks: RiskItem[] = [
       { code: "address_screen_failed", severity: "hard", message: "denied" },

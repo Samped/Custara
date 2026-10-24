@@ -1,13 +1,16 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  clearFxBookForTests,
   convertAmount,
   currencyFromCountry,
   resolveDisplayCurrency,
+  setFxBookForTests,
+  settleArcAmount,
   sumInCurrency,
 } from "../src/lib/currency";
 
-describe("currency helpers", () => {
+describe("currency helpers", { concurrency: false }, () => {
   it("defaults to USD when country is missing", () => {
     assert.equal(currencyFromCountry(null), "USD");
     assert.equal(currencyFromCountry(""), "USD");
@@ -26,6 +29,7 @@ describe("currency helpers", () => {
   });
 
   it("converts amounts for dashboard display", () => {
+    setFxBookForTests({ NGN: 1600 });
     assert.equal(convertAmount(1600, "NGN", "USD"), 1);
     assert.equal(convertAmount(1, "USD", "USDC"), 1);
     const sum = sumInCurrency(
@@ -36,5 +40,12 @@ describe("currency helpers", () => {
       "USD",
     );
     assert.equal(sum, 2);
+  });
+
+  it("does not invent a naira rate when the live book is empty", () => {
+    clearFxBookForTests();
+    assert.equal(convertAmount(1600, "NGN", "USD"), 1600);
+    assert.equal(settleArcAmount(3000, "NGN").quoted, false);
+    assert.equal(settleArcAmount(3000, "NGN").amount, 0);
   });
 });

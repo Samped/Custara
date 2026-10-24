@@ -1,0 +1,100 @@
+# MAINNET ONLY — https://custara.xyz
+# Fresh empty stack. Do not reuse custara-postgres / custara-worker / testnet Circle keys.
+# Apply this file as a second Render Blueprint (new project), then attach the
+# external DATABASE_URL and REDIS_URL to a new Vercel project for custara.xyz.
+# Leave ARC_PAYMENTS_LIVE=false until the Circle mainnet agent and fee wallet are funded.
+services:
+  - type: web
+    name: custara-mainnet-worker
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --include=dev && npx prisma generate
+    startCommand: npx prisma db push --skip-generate && npm run worker
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: APP_URL
+        value: https://custara.xyz
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://custara.xyz
+      - key: ARC_CHAIN
+        value: ARC
+      - key: ARC_PAYMENTS_LIVE
+        value: "false"
+      - key: ARC_ALLOW_SIMULATED
+        value: "false"
+      - key: NIGERIA_PAYMENT_LIVE
+        value: "false"
+      - key: ALLOW_JIT_ORG_CREATION
+        value: "true"
+      - key: PLATFORM_FEE_BPS
+        value: "75"
+      - key: PLATFORM_FEE_MIN_USDC
+        value: "0.10"
+      - key: PLATFORM_FEE_ADDRESS
+        sync: false
+      - key: ARC_USDC_TOKEN_ADDRESS
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: custara-mainnet-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: custara-mainnet-redis
+          property: connectionString
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: CIRCLE_API_KEY
+        sync: false
+      - key: CIRCLE_ENTITY_SECRET
+        sync: false
+      - key: CIRCLE_ENTITY_SECRET_CIPHERTEXT
+        sync: false
+      - key: CIRCLE_WEBHOOK_SECRET
+        sync: false
+      - key: CIRCLE_APP_ID
+        sync: false
+      - key: NEXT_PUBLIC_CIRCLE_APP_ID
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+
+  - type: keyvalue
+    name: custara-mainnet-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: Vercel and the mainnet worker
+
+databases:
+  - name: custara-mainnet-postgres
+    plan: free
+    region: oregon
+    postgresMajorVersion: "16"
+    databaseName: custara
+    user: custara
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: Vercel and the mainnet worker

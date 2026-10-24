@@ -3,6 +3,7 @@ import { writeAudit } from "@/lib/audit";
 import { isMailConfigured, sendEmail } from "@/lib/mail";
 import type { Role } from "@/lib/auth";
 import { INVITE_ROLE_OPTIONS, roleLabel } from "@/lib/roles";
+import { publicAppUrl } from "@/lib/publicUrl";
 
 const ROLES: Role[] = INVITE_ROLE_OPTIONS.map((r) => r.value);
 
@@ -68,7 +69,7 @@ export async function inviteWorkspaceUser(input: {
 
   if (isMailConfigured()) {
     const org = await prisma.organization.findUnique({ where: { id: input.organizationId } });
-    const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+    const appUrl = publicAppUrl();
     const loginUrl = appUrl ? `${appUrl}/login` : "/login";
     const label = roleLabel(role);
     await sendEmail({

@@ -7,6 +7,7 @@ import { createSession, hashToken, isEmailDomainAllowed, setMfaPending } from ".
 import { isOidcConfigured } from "./oidc";
 import { userNeedsMfaChallenge } from "./mfa";
 import { ensureAgentWallet } from "@/domain/arc/wallets";
+import { getArcChain } from "@/domain/arc/config";
 import { isMailConfigured, otpEmailContent, sendEmail } from "./mail";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -197,6 +198,8 @@ export async function resolveOrCreateUserByEmail(email: string) {
       privacyMode: true,
       // Enterprise default: real Arc rails (testnet/mainnet via env). Simulated requires ARC_ALLOW_SIMULATED.
       paymentMode: "live",
+      // Mainnet stays manual until an admin turns autopay on in Settings.
+      autoPayEnabled: getArcChain() !== "ARC",
       displayCurrency: "USD",
       ssoEnforced: false,
       mfaRequiredForRoles: "[]",

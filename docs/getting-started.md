@@ -56,7 +56,7 @@ Skip `redis-server` when Compose already provides Redis. Without Redis and the w
 npm run dev
 ```
 
-Open `https://custara.xyz`.
+Local: `http://localhost:3000`. Hosted testnet (current data, Arc testnet): `https://testnet.custara.xyz`. Hosted mainnet (empty until funded): `https://custara.xyz`. See [Operations](operations.md).
 
 ## Sign in
 
@@ -68,8 +68,8 @@ Invite teammates from **Settings**. Roles are admin, approver, payer, viewer, an
 
 ## First Arc payment
 
-1. In **Settings**, set payment mode to live. Live mode settles USDC on Arc.
-2. Open **Pay → Wallets**. Provision a Circle agent wallet, fund it with USDC, and sync the balance.
+1. In **Settings**, set payment mode to live. Live mode settles USDC on this host’s Arc network. On `custara.xyz`, pay stays gated until `ARC_PAYMENTS_LIVE=true`.
+2. Open **Pay → Wallets**. Provision a Circle agent wallet, fund it with USDC, and sync the balance. Autopay starts off on mainnet.
 3. Allowlist the vendor Arc address, or create the vendor through the API or CLI with `arc_address`, which allowlists it.
 4. Ingest a USDC invoice. A new vendor stays in review until a person approves it.
 5. Pay with rail `arc_usdc` from the invoice screen, the Partner API, or `custara pay`.

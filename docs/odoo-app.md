@@ -6,9 +6,9 @@ The optional module in [`odoo_apps/custara_ap`](../odoo_apps/custara_ap) is for 
 
 ## What it does
 
-- Settings → Accounting → **Custara AP**: API URL (`https://custara.xyz`) and a Custara Partner API key
+- Settings → Accounting → **Custara AP**: API URL and a Custara Partner API key. Customers use `https://custara.xyz`. Demos and the current test data use `https://testnet.custara.xyz`.
 - Vendor bill / credit: **Send to Custara** posts `POST /api/v1/erp/ingest`
-- Chatter notes that settlement is **Arc testnet USDC**, not mainnet
+- Chatter should name the host: testnet USDC on `testnet.custara.xyz`, mainnet only on apex after `ARC_PAYMENTS_LIVE=true`
 
 Custara still pulls on a 15-minute cron. The button is for operators who want a bill in Inbox immediately.
 
@@ -20,9 +20,9 @@ Copy `odoo_apps/custara_ap` into the Odoo addons path, update the apps list, ins
 
 **Title:** Custara AP
 
-**One-liner:** Custara is the AP control plane. Odoo stays the ledger. Approved bills can settle in Arc testnet USDC until mainnet is explicitly gated.
+**One-liner:** Custara is the AP control plane. Odoo stays the ledger. Approved bills settle in USDC on Arc.
 
-**Do not** describe this as a mainnet USDC or live on-chain payment app.
+Customer API URL: `https://custara.xyz`. Demo / current test data: `https://testnet.custara.xyz`. List after apex is its own empty mainnet stack (see [Operations](operations.md)).
 
 ## Partner one-pager
 

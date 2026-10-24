@@ -21,8 +21,11 @@ Node.js 22 is required.
 
 ```bash
 custara login --api-key "$CUSTARA_API_KEY" --url https://custara.xyz
+custara login --api-key "$CUSTARA_API_KEY" --url https://testnet.custara.xyz
 custara login --email you@company.com
 ```
+
+The default URL is apex (`https://custara.xyz`). Use `--url https://testnet.custara.xyz` (or `CUSTARA_URL`) for drills against the testnet stack and its existing data.
 
 The API key is for invoices, approvals, payments, vendors, wallets, cash, audit, and webhooks. The email login is for MFA, organization settings, and team invites, because those belong to a person.
 

@@ -48,6 +48,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       style={{ colorScheme: theme }}
       suppressHydrationWarning
     >
+      <head>
+        {/* Runs before React. Phantom/MetaMask both define window.ethereum. */}
+        <script src="/wallet-guard.js" />
+      </head>
       <body className="min-h-full font-sans text-foreground">
         <ThemeProvider initialTheme={theme}>{children}</ThemeProvider>
       </body>

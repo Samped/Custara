@@ -1,12 +1,12 @@
 # Custara
 
-Custara is an accounts-payable system for B2B teams. It takes invoices from email, upload, CSV, or API, runs extraction and risk checks, applies a versioned approval policy, and settles approved bills in Arc testnet USDC through Circle. Nigeria bank movement is an export file unless a licensed live flag is on.
+Custara is an accounts-payable system for B2B teams. It takes invoices from email, upload, CSV, or API, runs extraction and risk checks, applies a versioned approval policy, and settles approved bills in USDC on Arc through Circle. Test data lives on `testnet.custara.xyz`; `custara.xyz` is the empty mainnet host. Nigeria bank movement is an export file unless a licensed live flag is on.
 
 This repo is the full app: console, Partner API, CLI, background worker, and Postgres schema.
 
 **Documentation:** [docs/README.md](docs/README.md)
 
-**Status:** usable for design-partner pilots on Arc testnet. Not a SOC 2–certified primary ledger — see [docs/soc2-roadmap.md](docs/soc2-roadmap.md).
+**Status:** two hosts. `testnet.custara.xyz` is Arc testnet with existing data. `custara.xyz` is an empty Arc mainnet stack (`ARC_PAYMENTS_LIVE=false` until the agent is funded). Not a SOC 2–certified primary ledger — see [docs/soc2-roadmap.md](docs/soc2-roadmap.md).
 
 ---
 
@@ -90,7 +90,7 @@ npm run worker
 npm run dev
 ```
 
-Open [https://custara.xyz](https://custara.xyz).
+Open [http://localhost:3000](http://localhost:3000). Hosted stacks: [https://testnet.custara.xyz](https://testnet.custara.xyz) (Arc testnet, current data) and [https://custara.xyz](https://custara.xyz) (mainnet, empty until funded).
 
 Seed users (email OTP / Circle OTP depending on env):
 

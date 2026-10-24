@@ -30,7 +30,7 @@ Fund the agent in USDC from treasury, then sync from the wallet screen or `custa
 - Invoice status is `approved` or `payment_queued`
 - No hard risks remain
 - Extraction confidence is at or above the policy floor
-- Agent balance covers the amount and the daily spend cap is not exceeded
+- Agent balance covers the **vendor settlement plus the Custara fee** and the daily spend cap is not exceeded
 - For a person paying at or above the MFA threshold, authenticator enrollment and a valid code
 
 Creating a vendor with `arc_address` through `POST /api/v1/vendors` or `custara vendors create` adds the address to the allowlist.
@@ -49,10 +49,20 @@ The worker selects invoices where:
 
 It then creates a payment intent as the system actor. That path does not prompt for MFA.
 
+## Platform fee
+
+The buyer pays extra. The vendor still receives the full residual, and Odoo write-back uses that residual only.
+
+Default take is `75` bps (0.75%) of the USDC settlement, floor `0.10` USDC, no ceiling. Env: `PLATFORM_FEE_BPS`, `PLATFORM_FEE_MIN_USDC`, `PLATFORM_FEE_ADDRESS` (Custara treasury `0x`).
+
+At pay time there are two transfers: vendor amount, then fee. If the vendor transfer succeeds and the fee fails, the bill stays paid and the fee is retried. The vendor is not clawed back.
+
+Explorer links follow `ARC_CHAIN` (`testnet.arcscan.app` vs `arcscan.app`).
+
 ## After pay
 
-1. A payment intent is stored with rail `arc_usdc` and mode `live`.
-2. An `arc_transfer` agent task sends USDC from the agent wallet to the vendor address.
+1. A payment intent is stored with rail `arc_usdc` and mode `live`, plus `feeAmount` / `feeBps` when a treasury address is set.
+2. An `arc_transfer` agent task sends USDC from the agent wallet to the vendor address, then a second transfer to `PLATFORM_FEE_ADDRESS`.
 3. When Circle reports a terminal success, an `arc_reconcile` task writes the settlement and sets the invoice to `reconciled`.
 4. Webhooks `payment.intent_created`, `payment.failed`, and `invoice.reconciled` fire for endpoints subscribed to those events. Nigeria export also emits `payment.executed`.
 
@@ -71,6 +81,9 @@ A failed intent can be retried from the receipt. Retry sends a new Circle transf
 | `ARC_ALLOW_LIVE_ON_TESTNET` | Required when `ARC_CHAIN` is a test network |
 | `ARC_ALLOW_SIMULATED` | `false` in production |
 | `ARC_USDC_TOKEN_ADDRESS` | USDC contract on Arc, when the deployment overrides the default |
+| `PLATFORM_FEE_BPS` | Buyer-paid fee in basis points (default 75) |
+| `PLATFORM_FEE_MIN_USDC` | Floor in USDC (default 0.10) |
+| `PLATFORM_FEE_ADDRESS` | Custara treasury `0x`. Required before live mainnet pay |
 | `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET` | Developer-controlled wallets |
 | `CIRCLE_WEBHOOK_SECRET` | Verifies Circle webhooks in production |
 | `NIGERIA_PAYMENT_LIVE` | Leave false until a bank partner is live |

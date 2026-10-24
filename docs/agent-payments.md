@@ -76,14 +76,14 @@ Settlement closes in one of three ways:
 
 ## On-chain USDC
 
-Live mode sends a Circle transfer from the agent wallet to the vendor address.
+Live mode sends a Circle transfer from the agent wallet to the vendor address, then a second transfer for the buyer-paid Custara fee. The vendor transfer is authoritative for the bill. A failed fee is retried and does not fail the invoice.
 
 1. Organization payment mode is live. Simulated mode refuses Arc pay while `ARC_ALLOW_SIMULATED` is false.
 2. `ARC_PAYMENTS_LIVE=true`, `ARC_CHAIN` set for the deployment, and `ARC_ALLOW_SIMULATED=false`. A test network also requires `ARC_ALLOW_LIVE_ON_TESTNET=true`.
 3. `CIRCLE_API_KEY` and `CIRCLE_ENTITY_SECRET` are set. REST transfers also use `CIRCLE_ENTITY_SECRET_CIPHERTEXT`.
 4. The agent wallet provider is Circle. Replace a simulated wallet from **Pay → Wallets** before paying.
 5. Fund the agent with USDC and sync. Confirm the destination on the invoice, then initiate pay.
-6. Idempotency key `arc-transfer-{intentId}` produces a Circle transaction id and, once confirmed, an on-chain `txHash`.
+6. Idempotency key `arc-transfer-{intentId}-{taskId}-a{attempt}` produces a Circle transaction id and, once confirmed, an on-chain `txHash`. The fee uses `arc-fee-{intentId}`.
 
 `ARC_ALLOW_SIMULATED=true` records simulated transaction ids for local development. Leave it false in production.
 

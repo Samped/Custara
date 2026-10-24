@@ -2,9 +2,9 @@
 
 Pay is `/app/payments`. Open it from **Go to → Money → Pay**. Admins, payers, and viewers can open it. Approvers and auditors cannot.
 
-The header names the rail for this workspace. On the hosted site that is Arc testnet, which settles USDC from the payment wallet.
+The header names the rail for this workspace (`Arc testnet` or `Arc mainnet` from `ARC_CHAIN`). The buyer pays the vendor residual plus a disclosed Custara fee.
 
-Pay has four tabs. **Pay run** selects approved bills and settles residual on Arc testnet in one MFA step.
+Pay has four tabs. **Pay run** selects approved bills and settles residual on the deployment rail in one MFA step.
 
 ## Intents
 
@@ -16,7 +16,7 @@ The pay button itself is on the invoice, after the bill is `approved`. Under the
 
 ## Receipts
 
-Receipts opens `/app/receipts`. Each receipt is one intent, including settled and in-flight transfers. A transaction hash links to the Arc testnet explorer.
+Receipts opens `/app/receipts`. Each receipt is one intent, including settled and in-flight transfers. A transaction hash links to the explorer for this chain (`testnet.arcscan.app` or `arcscan.app`). The Custara fee hash is listed separately when collected.
 
 ## Wallets
 

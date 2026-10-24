@@ -29,7 +29,7 @@ Start URLs are `/api/connectors/xero/start` and `/api/connectors/accounting/{pro
 
 ## Odoo
 
-**Connectors** stores an Odoo API key (encrypted), optional user email, company, and bank journal. **Sync now** and the worker pull suppliers, purchase orders, bills, credits, taxes, and PDFs. After Custara pays (Arc testnet USDC), the payment is registered on that Odoo bill and retried if Odoo was down. Failed write-backs appear on this page. **Disconnect** clears the key. Details: [ERP adapters](erp-adapters.md). Optional [Odoo Apps module](odoo-app.md).
+**Connectors** stores an Odoo API key (encrypted), optional user email, company, and bank journal. Connect and **Sync now** pull every open vendor bill. The worker repeats that pull every minute, so a posted bill appears in Inbox without clicking Sync. Customer invoices (`INV/…`) are not bills to pay and are not pulled. After Custara pays (Arc testnet USDC), the payment is registered on that Odoo bill and retried if Odoo was down. Failed write-backs appear on this page. **Disconnect** clears the key. Details: [ERP adapters](erp-adapters.md). Optional [Odoo Apps module](odoo-app.md).
 
 ## ERP push
 

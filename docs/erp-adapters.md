@@ -22,7 +22,7 @@ Idempotency-Key: <stable-erp-document-id>
 
 ## Odoo
 
-**Console:** admin pastes the database URL, Odoo user email, optional company and bank journal id, and an API key. Disconnect removes the stored key. The worker repeats sync every 15 minutes and retries failed payment write-backs every 2 minutes. After the first pull, only records written in the last day plus the previous sync window are fetched. Sync paginates; Connectors warns if the record cap is hit.
+**Console:** admin pastes the database URL, Odoo user email, optional company and bank journal id, and an API key. Disconnect removes the stored key. Connect and Sync now pull all vendor bills. The worker repeats every minute (incremental) and retries failed payment write-backs every 2 minutes. Odoo can POST `/api/webhooks/odoo` with the connector token to trigger a pull immediately. Sync paginates; Connectors warns if the record cap is hit. Connectors also says when Odoo only has customer invoices (`INV/…`), which are not payable.
 
 **What syncs**
 

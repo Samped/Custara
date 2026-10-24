@@ -1,6 +1,6 @@
 # Custara Odoo app
 
-The connector in **Connectors** (database URL + API key) is the default for Odoo Online.
+The connector in **Connectors** (database URL + API key) is the default for Odoo Online. The worker pulls posted vendor bills every minute. If this module is installed and the API URL plus Partner API key are set, posting a vendor bill also pushes it to Custara immediately.
 
 The optional module in [`odoo_apps/custara_ap`](../odoo_apps/custara_ap) is for self-hosted Odoo and the Odoo Apps listing.
 

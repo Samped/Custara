@@ -52,7 +52,7 @@ Hard risks block automatic approval and block pay until they are cleared.
 | `new_vendor` | Vendor has not been verified. Approval sets `isNew` to false. |
 | `bank_detail_change` / `arc_address_change` | Payment destination changed |
 | `duplicate_invoice`, `duplicate_document_checksum`, `fuzzy_duplicate` | Same bill or a near match |
-| `contract_required` | Policy requires a purchase order and none is present |
+| `contract_required` | Policy requires a purchase order and none is present. Holds for review; after approval, pay is allowed |
 | `destination_not_allowlisted` | Arc address is not on the organization allowlist |
 | `address_screen_failed` | Optional address screener denied the destination, or live mode could not reach it |
 | `low_confidence` | Extraction confidence is under the policy floor |

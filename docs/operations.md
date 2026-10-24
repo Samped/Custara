@@ -62,7 +62,43 @@ Output is `cli/dist` and is not committed. Install with `npm i -g ./cli` from th
 
 ## Hosting on Vercel and Render
 
-The public site is the Next.js app on Vercel at `https://custara.xyz`. Postgres, Redis, and the worker run on Render’s free plan. `render.yaml` at the repository root is the blueprint.
+Custara runs as **two hosts**. Same Git repo, different env and databases. Do not flip `ARC_CHAIN=ARC` on the database that already has test invoices.
+
+| | `testnet.custara.xyz` | `custara.xyz` |
+|--|-----------------------|---------------|
+| Database | Current Render Postgres (moved in place) | New Postgres, `db push`, no seed |
+| Worker | Current worker (`render.yaml`) | New worker |
+| Circle | Existing **testnet** keys / agent | **Mainnet** Circle app, new agent, new webhook secret |
+| `ARC_CHAIN` | `ARC-TESTNET` | `ARC` |
+| `ARC_ALLOW_LIVE_ON_TESTNET` | `true` | unset |
+| `ARC_USDC_TOKEN_ADDRESS` | testnet default | **required** Circle mainnet USDC |
+| `ARC_PAYMENTS_LIVE` | `true` | `true` only after the fee wallet and agent are funded |
+| `ALLOW_JIT_ORG_CREATION` | as today | `true` only until the first real workspace |
+| `ENCRYPTION_KEY` | keep the key that decrypts the moved rows | **new** secrets |
+| `APP_URL` | `https://testnet.custara.xyz` | `https://custara.xyz` |
+| Circle webhook | `https://testnet.custara.xyz/api/webhooks/circle` | `https://custara.xyz/api/webhooks/circle` |
+
+Postgres, Redis, and the worker run on Render.
+
+- [`render.yaml`](../render.yaml) is **testnet only** (`custara-worker` / `custara-postgres`, `APP_URL=https://testnet.custara.xyz`, `ARC_CHAIN=ARC-TESTNET`).
+- [`render.mainnet.yaml`](../render.mainnet.yaml) is the **empty apex** stack (`custara-mainnet-worker` / `custara-mainnet-postgres`, `ARC_CHAIN=ARC`, `ARC_PAYMENTS_LIVE=false`). Env template: [`.env.mainnet.example`](../.env.mainnet.example).
+
+Do not apply `render.mainnet.yaml` on top of the existing testnet blueprint. That would reuse names or, worse, tempt you to point apex at the old database.
+
+### Enterprise mainnet cutover
+
+Testnet stays where it is. Apex is a new empty stack.
+
+1. **Freeze testnet.** Existing Vercel project keeps `testnet.custara.xyz`, current `DATABASE_URL`, current `ENCRYPTION_KEY`, `ARC_CHAIN=ARC-TESTNET`. Circle testnet webhook stays `https://testnet.custara.xyz/api/webhooks/circle`.
+2. **New Render Blueprint** from [`render.mainnet.yaml`](../render.mainnet.yaml). Fill new `SESSION_SECRET`, `ENCRYPTION_KEY` (not the testnet key), Circle **mainnet** keys, `PLATFORM_FEE_ADDRESS`, `ARC_USDC_TOKEN_ADDRESS`, R2. Do not seed.
+3. **New Vercel project** from the same Git repo. Copy [`.env.mainnet.example`](../.env.mainnet.example). Use the **external** URL of `custara-mainnet-postgres` and the `rediss://` URL of `custara-mainnet-redis`. `ARC_PAYMENTS_LIVE=false`. `REDIRECT_APEX_TO_TESTNET` unset.
+4. **Move apex domains.** Remove `custara.xyz` and `www.custara.xyz` from the testnet Vercel project. Add them on the mainnet project. Wait for the certificate. Spaceship `@` / `www` records stay Vercel; only the owning project changes.
+5. **Circle mainnet app** (not the testnet one). Webhook `https://custara.xyz/api/webhooks/circle`.
+6. **First workspace.** `GET https://custara.xyz/api/health` — `ok: true`, `gates.arc_chain` is `ARC`, `arc_payments_live` is false. Sign in; JIT creates an empty org (autopay off). Invite the team. Set `ALLOW_JIT_ORG_CREATION=false` on apex Vercel + worker and redeploy.
+7. Connect **production** Odoo with API URL `https://custara.xyz`. Allowlist real vendor `0x`. Enable MFA for pay roles. Leave autopay off.
+8. **Enable pay** only after the mainnet agent holds real USDC and `PLATFORM_FEE_ADDRESS` is a funded mainnet treasury: set `ARC_PAYMENTS_LIVE=true` on apex Vercel + worker, redeploy, then one small real pay.
+
+Odoo Apps listing: customer API URL `https://custara.xyz`; demos `https://testnet.custara.xyz`. List after step 6 (and ideally step 8).
 
 Free Render Postgres is 1 GB, has no backups, and expires 30 days after creation. After a 14-day grace period Render deletes it. Free Key Value is 25 MB and does not keep data across restarts. The worker is a free web service, because background workers are not on the free plan. It sleeps after 15 minutes without HTTP traffic. Autopay, webhook delivery, and polls resume when the next request wakes it. A ping every 10 minutes to the worker `/health` URL keeps it awake.
 
@@ -70,13 +106,15 @@ Vercel and the worker do not share a disk. Set `STORAGE_BACKEND=s3` and point `S
 
 ### Render
 
-Create a Blueprint from this repository. The worker build installs dev dependencies because `tsx` and the Prisma CLI live there. The free plan does not allow a pre-deploy command, so the start command runs `npx prisma db push` and then the worker. Do not seed.
+Create a Blueprint from this repository. For testnet, use root `render.yaml`. For mainnet, use `render.mainnet.yaml` as a **second** Render project. The worker build installs dev dependencies because `tsx` and the Prisma CLI live there. The free plan does not allow a pre-deploy command, so the start command runs `npx prisma db push` and then the worker. Do not seed.
 
-Copy the **external** Postgres URL and the Key Value URL for Vercel. The worker receives the internal URLs from the blueprint. Fill the prompted secrets on the worker: `SESSION_SECRET`, `ENCRYPTION_KEY`, Circle keys, `ARC_CHAIN`, and the R2 keys. `APP_URL` is `https://custara.xyz`.
+Copy the **external** Postgres URL and the Key Value URL for the matching Vercel project. The worker receives the internal URLs from the blueprint. Fill the prompted secrets on each worker: `SESSION_SECRET`, `ENCRYPTION_KEY`, Circle keys, `PLATFORM_FEE_ADDRESS`, and the R2 keys. Testnet `APP_URL` is `https://testnet.custara.xyz`. Mainnet `APP_URL` is `https://custara.xyz`.
 
 ### Vercel
 
-Import the GitHub repository. Framework is Next.js. Node.js is 22. Set the same `DATABASE_URL` (external), `REDIS_URL` (`rediss://`), `SESSION_SECRET`, `ENCRYPTION_KEY`, `OPENAI_API_KEY`, Circle keys, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and the R2 variables. `OPENAI_API_KEY` is required for invoice extraction on both Vercel and the worker.
+Import the GitHub repository. Framework is Next.js. Node.js is 22. Set the same `DATABASE_URL` (external), `REDIS_URL` (`rediss://`), `SESSION_SECRET`, `ENCRYPTION_KEY`, `OPENAI_API_KEY`, Circle keys, `ARC_PAYMENTS_LIVE`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `PLATFORM_FEE_*`, and the R2 variables. `OPENAI_API_KEY` is required for invoice extraction on both Vercel and the worker.
+
+The **existing** Vercel project stays on the testnet database and `testnet.custara.xyz`. Apex is a **new** Vercel project pointed at `custara-mainnet-postgres`. Never paste the testnet `DATABASE_URL` into the apex project.
 
 Set `ALLOW_JIT_ORG_CREATION=true` only until the first workspace exists, then remove it and redeploy. Production does not create a workspace for an unknown email when that variable is unset.
 
@@ -88,15 +126,17 @@ At the registrar for `custara.xyz`:
 |--------|------|--------|
 | A | `@` | `76.76.21.21` |
 | CNAME | `www` | `cname.vercel-dns.com` |
+| CNAME | `testnet` | `cname.vercel-dns.com` |
 
-Add `custara.xyz` and `www.custara.xyz` in the Vercel project and wait for the certificate.
+`testnet.custara.xyz` stays on the testnet Vercel project (Spaceship CNAME `testnet` → the value Vercel shows). After the mainnet Vercel project exists, move `custara.xyz` and `www.custara.xyz` to that project.
 
 ### After the first deploy
 
-- `GET https://custara.xyz/api/health` returns `ok: true` when Postgres and Redis answer.
-- Circle webhooks go to `https://custara.xyz/api/webhooks/circle`.
+- `GET https://testnet.custara.xyz/api/health` returns `ok: true` when Postgres and Redis answer. After cutover, the same check on `https://custara.xyz` hits the **mainnet** database.
+- Circle webhooks go to `{APP_URL}/api/webhooks/circle` for that stack.
 - `CIRCLE_WEBHOOK_SECRET` is set on Vercel. Production rejects unsigned Circle webhooks.
 - The worker log shows `worker health listening`.
+- Health `gates.app_url` matches the host you are on.
 
 ## Production checklist
 
@@ -110,6 +150,8 @@ Add `custara.xyz` and `www.custara.xyz` in the Vercel project and wait for the c
 - OIDC is configured if the organization enforces SSO
 - MFA threshold is set to the organization's policy, not left at the default by accident
 - `GET /api/health` returns `ok: true`
+- Apex: `gates.arc_chain` is `ARC` and `arc_payments_live` is false until the agent and `PLATFORM_FEE_ADDRESS` are funded
+- After the first apex workspace, `ALLOW_JIT_ORG_CREATION` is false
 - API keys are scoped to what each integration needs and can be revoked
 - Webhook endpoints are HTTPS and verify signatures
 

@@ -9,6 +9,8 @@ export async function upsertVendorPurchaseOrder(input: {
   amount?: number | null;
   currency?: string;
   label?: string | null;
+  orderedQty?: number | null;
+  receivedQty?: number | null;
 }) {
   const poNumber = input.poNumber.trim();
   if (!poNumber) throw new Error("PO number required");
@@ -32,6 +34,8 @@ export async function upsertVendorPurchaseOrder(input: {
       amount: input.amount ?? null,
       currency: (input.currency || "NGN").toUpperCase(),
       label: input.label?.trim() || null,
+      orderedQty: input.orderedQty ?? null,
+      receivedQty: input.receivedQty ?? null,
       status: "open",
     },
     update: {
@@ -39,6 +43,8 @@ export async function upsertVendorPurchaseOrder(input: {
       amount: input.amount ?? null,
       currency: (input.currency || "NGN").toUpperCase(),
       label: input.label?.trim() || null,
+      orderedQty: input.orderedQty ?? null,
+      receivedQty: input.receivedQty ?? null,
       status: "open",
     },
   });
@@ -76,6 +82,7 @@ export async function matchPurchaseOrder(input: {
   poNumber: string | null | undefined;
   totalAmount: number;
   currency: string;
+  billedQty?: number | null;
   requirePurchaseOrder?: boolean;
 }): Promise<
   Array<{
@@ -160,6 +167,33 @@ export async function matchPurchaseOrder(input: {
         evidence: { poAmount: po.amount, invoiceAmount: input.totalAmount },
       });
     }
+  }
+
+  if (
+    po.orderedQty != null &&
+    po.receivedQty != null &&
+    po.orderedQty > 0 &&
+    po.receivedQty + 0.001 < po.orderedQty
+  ) {
+    risks.push({
+      code: "po_receive_short",
+      severity: "medium",
+      message: `PO ${poNumber} is received ${po.receivedQty} of ${po.orderedQty}. Three-way match is incomplete.`,
+      evidence: { orderedQty: po.orderedQty, receivedQty: po.receivedQty },
+    });
+  }
+
+  if (
+    input.billedQty != null &&
+    po.receivedQty != null &&
+    input.billedQty > po.receivedQty + 0.001
+  ) {
+    risks.push({
+      code: "po_line_qty_over",
+      severity: "hard",
+      message: `Bill quantity ${input.billedQty} exceeds received ${po.receivedQty} on PO ${poNumber}.`,
+      evidence: { billedQty: input.billedQty, receivedQty: po.receivedQty },
+    });
   }
 
   return risks;

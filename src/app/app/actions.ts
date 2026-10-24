@@ -78,6 +78,7 @@ export async function createPaymentAction(formData: FormData) {
   const idempotencyKey = String(formData.get("idempotencyKey") || `pay_${invoiceId}_${Date.now()}`);
   const mfaCode = String(formData.get("mfaCode") || "") || null;
 
+  const amountRaw = Number(formData.get("amount") || 0);
   const intent = await createPaymentIntent({
     organizationId: user.organizationId,
     invoiceId,
@@ -85,6 +86,7 @@ export async function createPaymentAction(formData: FormData) {
     actorType: "user",
     actorId: user.id,
     mfaCode,
+    amount: amountRaw > 0 ? amountRaw : null,
   });
 
   revalidatePath("/app/payments");

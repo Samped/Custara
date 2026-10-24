@@ -7,6 +7,8 @@ import { putObject } from "@/lib/storage";
 import { enqueueAgentTask } from "@/domain/arc/tasks";
 import { ensureAgentWallet } from "@/domain/arc/wallets";
 import { convertAmount } from "@/lib/currency";
+import { quoteArcSettlement, refreshLiveFxBook } from "@/domain/fx/liveQuote";
+import { assertFiscalUnlocked, invoiceOpenAmount, listOpenVendorCredits } from "@/domain/apLedger";
 
 export type PaymentAdapterResult = {
   status: "exported" | "submitted" | "failed" | "queued";
@@ -109,6 +111,7 @@ export async function createPaymentIntent(input: {
   requestId?: string;
   mfaCode?: string | null;
   apiStepUpToken?: string | null;
+  amount?: number | null;
 }) {
   const existing = await prisma.paymentIntent.findUnique({
     where: {
@@ -138,13 +141,44 @@ export async function createPaymentIntent(input: {
   if (!invoice.totalAmount || invoice.totalAmount <= 0) {
     throw new Error("Invoice amount missing");
   }
+  assertFiscalUnlocked(invoice);
+  const residual = invoiceOpenAmount(invoice);
+  if (residual <= 0.01) {
+    throw new Error("Nothing left to pay on this bill.");
+  }
+  const ledgerPay =
+    input.amount != null && Number.isFinite(input.amount) && input.amount > 0
+      ? Math.min(input.amount, residual)
+      : residual;
+  if (ledgerPay <= 0.01) throw new Error("Payment amount is too small.");
+  let odooMeta: { odooMoveType?: string; odooPaymentState?: string; odooResidual?: number } = {};
+  try {
+    odooMeta = invoice.extraction?.rawJson ? JSON.parse(invoice.extraction.rawJson) : {};
+  } catch {
+    odooMeta = {};
+  }
+  if (odooMeta.odooMoveType === "in_refund") {
+    throw new Error("This Odoo document is a vendor credit. Apply it to a bill instead of paying.");
+  }
+  if (odooMeta.odooPaymentState === "paid" || (odooMeta.odooResidual != null && odooMeta.odooResidual <= 0.01)) {
+    throw new Error("Odoo already shows this bill as paid.");
+  }
+  if (invoice.vendorId && !invoice.creditWaivedAt && (invoice.creditApplied || 0) <= 0.01) {
+    const openCredits = await listOpenVendorCredits(input.organizationId, invoice.vendorId);
+    if (openCredits.length) {
+      throw new Error(
+        `Vendor has an open credit (${openCredits[0].invoiceNumber || openCredits[0].externalId}). Apply or waive it before paying.`,
+      );
+    }
+  }
 
+  await refreshLiveFxBook();
   const { assertPayStepUp } = await import("@/domain/payStepUp");
   await assertPayStepUp({
     organizationId: input.organizationId,
     actorType: input.actorType,
     actorId: input.actorId,
-    amountUsd: convertAmount(invoice.totalAmount, invoice.currency, "USD"),
+    amountUsd: convertAmount(ledgerPay, invoice.currency, "USD"),
     mfaCode: input.mfaCode,
     apiStepUpToken: input.apiStepUpToken,
   });
@@ -181,15 +215,22 @@ export async function createPaymentIntent(input: {
   const mode = org.paymentMode === "live" ? "live" : "sandbox";
 
   let beneficiary: Record<string, unknown>;
+  const arcSettlement =
+    rail === "arc_usdc"
+      ? await quoteArcSettlement(ledgerPay, invoice.currency, { fresh: true })
+      : null;
+  if (arcSettlement && !arcSettlement.quoted) {
+    throw new Error(
+      "Live FX quote unavailable. Custara will not invent a naira/USDC rate. Retry when Circle or Coinbase responds.",
+    );
+  }
 
   if (rail === "arc_usdc") {
     const arcAddress = arc?.arcAddress;
     if (!arcAddress) {
       throw new Error("Arc USDC rail requires an active vendor arc_usdc endpoint");
     }
-    if (invoice.currency !== "USDC" && invoice.currency !== "USD") {
-      throw new Error(`Arc rail requires USDC invoice currency (got ${invoice.currency})`);
-    }
+    const settlement = arcSettlement!;
     await ensureAgentWallet({
       organizationId: input.organizationId,
       actorType: input.actorType,
@@ -203,8 +244,8 @@ export async function createPaymentIntent(input: {
       organizationId: input.organizationId,
       invoiceId: invoice.id,
       rail,
-      amount: invoice.totalAmount,
-      currency: invoice.currency,
+      amount: settlement.amount,
+      currency: settlement.currency,
       arcAddress,
     });
 
@@ -213,7 +254,13 @@ export async function createPaymentIntent(input: {
       vendorName: invoice.vendor?.name || invoice.extraction?.vendorName,
       arcAddress: arcAddress.toLowerCase(),
       endpointType: "arc_usdc",
-      currency: invoice.currency === "USD" ? "USDC" : invoice.currency,
+      currency: settlement.currency,
+      sourceAmount: settlement.sourceAmount,
+      sourceCurrency: settlement.sourceCurrency,
+      fxUnitsPerUsd: settlement.unitsPerUsd,
+      fxSource: settlement.source,
+      fxFetchedAt: settlement.fetchedAt,
+      fxQuoteId: settlement.quoteId,
       frozenAt: new Date().toISOString(),
     };
   } else {
@@ -250,11 +297,12 @@ export async function createPaymentIntent(input: {
       organizationId: input.organizationId,
       invoiceId: invoice.id,
       rail,
-      amount: invoice.totalAmount,
+      amount: ledgerPay,
       currency: invoice.currency,
     });
   }
 
+  const nextResidual = Math.max(0, residual - ledgerPay);
   const intent = await prisma.paymentIntent.create({
     data: {
       organizationId: input.organizationId,
@@ -262,8 +310,8 @@ export async function createPaymentIntent(input: {
       idempotencyKey: input.idempotencyKey,
       status: "queued",
       rail,
-      amount: invoice.totalAmount,
-      currency: rail === "arc_usdc" ? "USDC" : invoice.currency,
+      amount: arcSettlement?.amount ?? ledgerPay,
+      currency: arcSettlement?.currency ?? invoice.currency,
       beneficiaryJson: JSON.stringify({
         ...beneficiary,
         _accountNumber: undefined,
@@ -275,7 +323,10 @@ export async function createPaymentIntent(input: {
 
   await prisma.invoice.update({
     where: { id: invoice.id },
-    data: { status: "payment_queued" },
+    data: {
+      residualAmount: nextResidual,
+      status: nextResidual <= 0.01 ? "payment_queued" : "approved",
+    },
   });
 
   try {
@@ -312,6 +363,9 @@ export async function createPaymentIntent(input: {
           mode,
           agentTaskId: task.id,
           idempotencyKey: input.idempotencyKey,
+          fxSource: arcSettlement?.source,
+          fxUnitsPerUsd: arcSettlement?.unitsPerUsd,
+          fxFetchedAt: arcSettlement?.fetchedAt,
         },
       });
 
@@ -397,6 +451,17 @@ export async function createPaymentIntent(input: {
       provider_ref: adapterResult.providerRef,
     });
 
+    if (updated.status === "exported") {
+      const { writeOdooPaymentBack } = await import("@/domain/connectors/odoo");
+      await writeOdooPaymentBack({
+        organizationId: input.organizationId,
+        invoiceId: invoice.id,
+        paymentIntentId: intent.id,
+        amount: intent.amount,
+        currency: intent.currency,
+      });
+    }
+
     return updated;
   } catch (e) {
     const message = e instanceof Error ? e.message : "Payment adapter error";
@@ -406,7 +471,7 @@ export async function createPaymentIntent(input: {
     });
     await prisma.invoice.update({
       where: { id: invoice.id },
-      data: { status: "payment_failed" },
+      data: { status: nextResidual <= 0.01 ? "payment_failed" : "approved", residualAmount: residual },
     });
     await dispatchWebhook(input.organizationId, "payment.failed", {
       id: intent.id,

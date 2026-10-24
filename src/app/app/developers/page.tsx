@@ -153,7 +153,7 @@ export default async function DevelopersPage({
         ? "Arc mainnet USDC"
         : arcMode === "simulated"
           ? "Simulated"
-          : "Blocked until Payment mode is Arc testnet";
+          : "Blocked until Payment mode is Live Arc";
 
   const curlAllow = `curl -s ${baseUrl}/api/v1/vendors \\
   -H "Authorization: Bearer $CUSTARA_API_KEY" \\
@@ -279,7 +279,7 @@ echo "$APPROVAL_ID"`;
                 · token <code className="text-[0.72rem]">{usdcToken}</code>
               </>
             ) : null}
-            . Webhooks for <code>payment.sent</code> carry the Arc testnet transfer when this mode is on.
+            . Webhooks for <code>payment.sent</code> carry the Arc transfer when this mode is on.
           </p>
         </section>
 

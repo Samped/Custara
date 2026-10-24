@@ -6,6 +6,7 @@ import { ThemeToggle } from "./ThemeProvider";
 import { PageAtmosphere } from "./GridAtmosphere";
 import { CurrencyToggle } from "./CurrencyToggle";
 import { LiveRefresh } from "./LiveRefresh";
+import { arcNetworkCopy, getArcExecutionMode } from "@/domain/arc/config";
 
 export function AppShell({
   user,
@@ -38,6 +39,8 @@ export function AppShell({
             <div className="app-header-tools">
               <span className="badge bg-accent-soft text-accent">
                 {user.paymentMode === "live" ? "live rails" : "simulated"}
+                {" · "}
+                {arcNetworkCopy(getArcExecutionMode(user.paymentMode))}
               </span>
               <CurrencyToggle value={user.displayCurrency} />
               <ThemeToggle />

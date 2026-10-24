@@ -12,6 +12,7 @@ import {
 } from "@/lib/currency";
 import { BeginMfaForm, DisableMfaForm, SettingsOrgForm } from "@/components/app/SettingsForms";
 import { MfaEnrollPanel } from "@/components/app/MfaEnrollPanel";
+import { arcNetworkCopy, getArcExecutionMode } from "@/domain/arc/config";
 
 export default async function SettingsPage({
   searchParams,
@@ -131,10 +132,10 @@ export default async function SettingsPage({
             Payment mode
             <select name="paymentMode" className="input mt-1" defaultValue={org.paymentMode}>
               <option value="sandbox">Simulated</option>
-              <option value="live">Arc testnet</option>
+              <option value="live">Live Arc</option>
             </select>
             <span className="mt-1 block text-[0.75rem] text-muted">
-              Arc testnet settles USDC through Circle on ARC-TESTNET. API payments and webhooks follow this mode.
+              Live mode settles USDC through Circle on {arcNetworkCopy(getArcExecutionMode("live"))}. Simulated moves no funds. API payments and webhooks follow this mode.
             </span>
           </label>
           <label className="flex items-center gap-2 text-sm">
@@ -162,7 +163,7 @@ export default async function SettingsPage({
               Auto-pay approved vendors on the recommended date
             </span>
             <span className="mt-1 block text-[0.75rem] text-muted">
-              On by default. New vendors still wait for a person. Uncheck to pause.
+              On by default on testnet. New mainnet workspaces start with this off until you turn it on. New vendors still wait for a person.
             </span>
           </label>
           <label className="flex items-center gap-2 text-sm">

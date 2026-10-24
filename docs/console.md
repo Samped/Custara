@@ -6,7 +6,7 @@ The **Go to** menu is documented page by page:
 
 - Work — [Home](home.md), [Inbox](inbox.md), [Approvals](approvals.md), [Vendors](vendors.md)
 - Money — [Pay](pay.md), [Cash](cash.md)
-- Admin — [Controls](controls.md), [Roles](roles.md), [Security](app-security.md), [Settings](settings.md)
+- Admin — [Controls](controls.md), [Roles](roles.md), [Security](app-security.md), [Settings](settings.md), [Connectors](connectors.md)
 
 | Path | Who | Purpose |
 |------|-----|---------|

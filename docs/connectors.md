@@ -1,6 +1,8 @@
 # Connectors
 
-Connectors bring bills in or push outcomes to an accounting system. Secrets for mailbox passwords and OAuth tokens are stored encrypted.
+Connectors is `/app/connectors`. Open it from **Go to → Admin → Connectors**. Only an admin can open it.
+
+Connectors bring bills in or push outcomes to an accounting system. Secrets for mailbox passwords, Odoo API keys, and OAuth tokens are stored encrypted.
 
 ## Mailbox
 
@@ -25,9 +27,13 @@ OAuth connectors:
 
 Start URLs are `/api/connectors/xero/start` and `/api/connectors/accounting/{provider}/start`. Leave `QBO_DEMO_SYNC`, `SAGE_DEMO_SYNC`, and `ZOHO_DEMO_SYNC` unset in production.
 
+## Odoo
+
+**Connectors** stores an Odoo API key (encrypted), optional user email, company, and bank journal. **Sync now** and the worker pull suppliers, purchase orders, bills, credits, taxes, and PDFs. After Custara pays (Arc testnet USDC), the payment is registered on that Odoo bill and retried if Odoo was down. Failed write-backs appear on this page. **Disconnect** clears the key. Details: [ERP adapters](erp-adapters.md). Optional [Odoo Apps module](odoo-app.md).
+
 ## ERP push
 
-Integrations use the Partner API. `POST /api/v1/erp/ingest` accepts Odoo, SAP, and Dynamics payloads. Field lists are in [ERP adapters](erp-adapters.md). An ERP that already emits Custara's document shape calls `POST /api/v1/invoices`.
+SAP and Dynamics, or an Odoo addon that posts itself, use `POST /api/v1/erp/ingest`. Field lists are in [ERP adapters](erp-adapters.md). An ERP that already emits Custara's document shape calls `POST /api/v1/invoices`.
 
 ## WhatsApp
 

@@ -15,7 +15,7 @@ npm i -g ./cli
 
 Publishing the `cli` directory to the npm registry is what makes `npm i -g custara` work on another machine.
 
-Node.js 20 or newer is required.
+Node.js 22 is required.
 
 ## Configure
 

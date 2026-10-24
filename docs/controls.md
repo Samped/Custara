@@ -24,6 +24,8 @@ The form sets:
 | Require a purchase order on every invoice | A bill with no PO number is held |
 | Hold if wallet not allowlisted | An unknown Arc address is held |
 | Block auto-approve until Arc destination allowlisted | A known address can still block auto-approve until it is on the allowlist |
+| Require approval when a bill is coded to a cost center | Analytic names from Odoo hold the bill for a person |
+| Cost centers that require approval | Optional names. Empty means any cost center. |
 
 **Publish policy version** saves the form as the next version. **Apply PayablesAI Strict preset** fills the live preset: auto-approve up to 5,000 USDC, confidence floor 0.75, purchase order required, and the new-vendor, duplicate, and allowlist holds on.
 

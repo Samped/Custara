@@ -50,7 +50,7 @@ Spend is also capped by the organization daily USD limit checked at pay time.
 
 ## Data protection
 
-- Bank account numbers and webhook signing secrets are encrypted with AES-256-GCM using `ENCRYPTION_KEY`.
+- Bank account numbers, mailbox passwords, Odoo API keys, and webhook signing secrets are encrypted with AES-256-GCM using `ENCRYPTION_KEY`.
 - Audit events are hash-chained. See [Audit](audit.md).
 - Documents sit on local disk or S3 (`STORAGE_BACKEND`).
 - Platform-wide network metrics on the public home page are limited to emails in `PLATFORM_ADMIN_EMAILS`.

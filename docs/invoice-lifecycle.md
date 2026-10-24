@@ -13,7 +13,7 @@ ingest → extract → risk → policy → approve → pay timing → payment in
 | Upload | Inbox, PDF or JSON |
 | Partner API | `POST /api/v1/invoices` |
 | CSV | `POST /api/v1/invoices/bulk` or Inbox |
-| ERP | `POST /api/v1/erp/ingest` (`odoo`, `sap`, `dynamics`) |
+| ERP | Odoo from **Connectors**, or `POST /api/v1/erp/ingest` (`odoo`, `sap`, `dynamics`) |
 | Email | Mailbox connector or `POST /api/ingest/mailbox` |
 | SFTP | Drop folder polled by the worker |
 | FIRS e-invoice | `POST /api/v1/einvoice/firs` |
@@ -86,3 +86,5 @@ After approval, Custara sets `recommendedPayDate`.
 - Otherwise the date is the due date.
 
 Autopay, on by default, pays approved invoices for vendors that are not new, on the recommended date, when no hard risk remains. Amounts above the policy ceiling still need a human approval before the status becomes `approved`. The system actor that runs autopay does not require MFA.
+
+Pay uses the open residual, not only the header total. A smaller amount is a partial payment. Open vendor credits must be applied or waived before pay. Settlement of a naira (or other fiat) bill uses a live FX quote at pay time — Circle CPN when the account has the NGN corridor, otherwise Coinbase spot. Custara does not hardcode a naira rate. If no feed responds, pay is blocked.

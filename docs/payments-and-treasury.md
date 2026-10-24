@@ -24,7 +24,7 @@ Fund the agent in USDC from treasury, then sync from the wallet screen or `custa
 - Organization payment mode is live
 - `ARC_PAYMENTS_LIVE=true` and `ARC_CHAIN` set to the deployment network. A test network also requires `ARC_ALLOW_LIVE_ON_TESTNET=true`
 - Circle API key and entity secret are configured
-- Invoice currency is `USDC` or `USD`
+- Invoice currency is `USDC` or `USD`, or a live FX quote exists for the bill currency (NGN → USDC via Circle CPN when enabled, otherwise Coinbase spot). Pay is refused if no live quote returns.
 - Vendor has an active `arc_usdc` endpoint
 - That address is on the allowlist
 - Invoice status is `approved` or `payment_queued`

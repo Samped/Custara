@@ -8,7 +8,7 @@ Shortcuts to the rest of administration:
 
 | Link | Opens |
 |------|--------|
-| Connectors | Mailbox, file drop, and other ingest channels |
+| Connectors | Mailbox, Odoo, file drop, and other ingest channels |
 | API | Keys, webhooks, and the quickstart on `/app/developers` |
 | Roles | Team and sign-in MFA by role |
 | Controls | Policy versions and the audit list |

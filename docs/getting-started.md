@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 22
 - PostgreSQL 16 (embedded helper or Docker)
 - Redis 7, required for the background worker
 
@@ -22,7 +22,7 @@ Set at least these values in `.env`:
 | `DATABASE_URL` | Postgres connection string |
 | `REDIS_URL` | Redis for BullMQ |
 | `SESSION_SECRET` | Session signing secret, 16 characters or more |
-| `ENCRYPTION_KEY` | AES-256-GCM key for bank numbers and webhook secrets |
+| `ENCRYPTION_KEY` | AES-256-GCM key for bank numbers, Odoo API keys, and webhook secrets |
 
 The example file points Postgres at `127.0.0.1:54329`, which is the embedded database port.
 

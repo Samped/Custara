@@ -42,7 +42,7 @@ The job runs as the system actor and does not prompt for MFA. Idempotency key: `
 
 ### Arc prerequisites
 
-- Invoice currency `USD` or `USDC`
+- Invoice currency `USD` or `USDC`, or another currency with a **live** FX quote (NGN bills convert to USDC at pay time)
 - Vendor has an active `arc_usdc` endpoint
 - Destination is on the organization allowlist
 - Agent wallet is a Circle wallet and is not frozen
@@ -100,5 +100,8 @@ Live mode sends a Circle transfer from the agent wallet to the vendor address.
 | `ARC_USDC_TOKEN_ADDRESS` | USDC contract when the deployment overrides the default |
 | `CIRCLE_WEBHOOK_SECRET` | Verifies Circle webhooks in production |
 | `REDIS_URL` | Worker queues |
+| `FX_CACHE_TTL_MS` | How long a live FX book is reused for display (default 60s). Pay always refreshes. |
+
+Fiat → USDC uses a live quote, never a hardcoded naira peg. Order: Circle CPN (NGN corridor when the Circle account has it), Circle Mint reference quotes for Mint pairs, Coinbase USDC/NGN spot, CoinGecko USDC, then public USD books. Payment fails closed if no feed responds. The quote source, rate, and time are stored on the payment intent beneficiary snapshot.
 
 Release checks are in [Release verification](qa-runbook.md).

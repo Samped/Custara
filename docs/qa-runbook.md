@@ -74,6 +74,8 @@ curl -s https://custara.xyz/api/v1/erp/ingest -H "Authorization: Bearer $KEY" \
   -d @fixtures/api/erp-odoo.json
 ```
 
+On `/app/connectors`, paste an Odoo API key and Connect. Posted vendor bills land in Inbox with external id `odoo:{id}`. After Arc pay, the Odoo bill shows the payment. Disconnect removes the stored key.
+
 ## 10. Dual approval
 
 1. First approver approves `inv_dual_002` on `/app/approvals`.

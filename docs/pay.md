@@ -4,7 +4,7 @@ Pay is `/app/payments`. Open it from **Go to → Money → Pay**. Admins, payers
 
 The header names the rail for this workspace. On the hosted site that is Arc testnet, which settles USDC from the payment wallet.
 
-Pay has three tabs.
+Pay has four tabs. **Pay run** selects approved bills and settles residual on Arc testnet in one MFA step.
 
 ## Intents
 

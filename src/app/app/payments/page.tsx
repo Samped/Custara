@@ -16,6 +16,10 @@ import {
   statusBadgeClass,
 } from "@/lib/format";
 import { getArcExecutionMode } from "@/domain/arc/config";
+import { InvoiceActionForm } from "@/components/app/InvoiceActionForm";
+import { invoiceOpenAmount } from "@/domain/apLedger";
+import { listPayRunCandidates } from "@/domain/payRun";
+import { canPay } from "@/lib/auth";
 
 function arcExplorerTxUrl(txHash: string) {
   return `https://testnet.arcscan.app/tx/${txHash}`;
@@ -24,7 +28,7 @@ function arcExplorerTxUrl(txHash: string) {
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ intent?: string; tab?: string }>;
+  searchParams: Promise<{ intent?: string; tab?: string; run?: string }>;
 }) {
   let user;
   try {
@@ -33,10 +37,11 @@ export default async function PaymentsPage({
     redirect("/login");
   }
   const params = await searchParams;
-  const tab = params.tab === "wallets" ? "wallets" : "intents";
+  const tab = params.tab === "wallets" ? "wallets" : params.tab === "run" ? "run" : "intents";
 
   const tabs = [
     { id: "intents", label: "Intents", href: "/app/payments" },
+    { id: "run", label: "Pay run", href: "/app/payments?tab=run" },
     { id: "receipts", label: "Receipts", href: "/app/receipts" },
     { id: "wallets", label: "Wallets", href: "/app/payments?tab=wallets" },
   ];
@@ -53,6 +58,69 @@ export default async function PaymentsPage({
         <div className="mt-5">
           <WalletsWorkspace organizationId={user.organizationId} userId={user.id} />
         </div>
+      </AppShell>
+    );
+  }
+
+  if (tab === "run") {
+    const candidates = await listPayRunCandidates(user.organizationId);
+    const recentRuns = await prisma.payRun.findMany({
+      where: { organizationId: user.organizationId },
+      include: { items: true },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    });
+    return (
+      <AppShell user={user} title="Pay">
+        <SectionTabs tabs={tabs} active="run" />
+        {params.run ? (
+          <p className="dash-panel mt-4 mb-3 text-[0.78rem] text-accent">Pay run {params.run.slice(0, 8)} submitted on Arc testnet.</p>
+        ) : null}
+        <section className="dash-panel mt-4">
+          <h2 className="dash-h">Approved bills</h2>
+          <p className="dash-sub mt-1">Select bills, then settle residual on Arc testnet in one MFA step.</p>
+          {canPay(user.role) ? (
+            <InvoiceActionForm action="create_pay_run" className="mt-4 space-y-3">
+              {candidates.map((inv) => (
+                <label key={inv.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex items-center gap-2">
+                    <input type="checkbox" name="invoiceIds" value={inv.id} />
+                    <Link href={`/app/invoices/${inv.id}`} className="text-accent hover:underline">
+                      {inv.invoiceNumber || inv.id.slice(0, 8)}
+                    </Link>
+                    <span className="text-muted">{inv.vendor?.name || "Vendor"}</span>
+                  </span>
+                  <span>{formatMoney(invoiceOpenAmount(inv), inv.currency)}</span>
+                </label>
+              ))}
+              {!candidates.length ? <p className="text-sm text-muted">No approved bills ready to pay.</p> : null}
+              {candidates.length ? (
+                <>
+                  <label className="block text-sm">
+                    Step-up MFA (if required)
+                    <input name="mfaCode" className="input mt-1" inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit TOTP" />
+                  </label>
+                  <button type="submit" className="btn btn-primary">
+                    Pay selected on Arc testnet
+                  </button>
+                </>
+              ) : null}
+            </InvoiceActionForm>
+          ) : (
+            <p className="mt-3 text-sm text-muted">A payer must run this batch.</p>
+          )}
+        </section>
+        <section className="dash-panel mt-4">
+          <h2 className="dash-h">Recent runs</h2>
+          <ul className="mt-3 space-y-2 text-sm text-muted">
+            {recentRuns.map((run) => (
+              <li key={run.id}>
+                {formatDate(run.createdAt)} · {run.status} · {run.items.length} bills
+              </li>
+            ))}
+            {!recentRuns.length ? <li>No pay runs yet.</li> : null}
+          </ul>
+        </section>
       </AppShell>
     );
   }

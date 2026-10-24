@@ -64,8 +64,14 @@ export async function getPaymentReceipt(organizationId: string, paymentIntentId:
 
 export type PaymentReceipt = NonNullable<Awaited<ReturnType<typeof getPaymentReceipt>>>;
 
+export function arcExplorerBase() {
+  const raw = (process.env.ARC_CHAIN || "ARC-TESTNET").toUpperCase();
+  if (raw === "ARC" || raw === "ARC-MAINNET") return "https://arcscan.app";
+  return "https://testnet.arcscan.app";
+}
+
 export function arcExplorerTxUrl(txHash: string) {
-  return `https://testnet.arcscan.app/tx/${txHash}`;
+  return `${arcExplorerBase()}/tx/${txHash}`;
 }
 
 export function isSimulatedIntent(intent: {

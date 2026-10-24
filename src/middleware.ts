@@ -1,7 +1,17 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { isApexHost, shouldRedirectApexToTestnet, TESTNET_HOST } from "@/lib/publicUrl";
 
 export function middleware(request: NextRequest) {
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (shouldRedirectApexToTestnet() && isApexHost(host)) {
+    const dest = request.nextUrl.clone();
+    dest.hostname = TESTNET_HOST;
+    dest.protocol = "https:";
+    dest.port = "";
+    return NextResponse.redirect(dest, 302);
+  }
+
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", request.nextUrl.pathname);

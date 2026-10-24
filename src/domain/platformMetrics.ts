@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { isVerifiedBusiness } from "@/lib/businessPresence";
 import { convertAmount } from "@/lib/currency";
+import { refreshLiveFxBook } from "@/domain/fx/liveQuote";
 
 const INGEST_STATUSES = ["received", "extracting"] as const;
 const SETTLED_STATUSES = ["payment_sent", "reconciled", "settled"] as const;
@@ -46,6 +47,7 @@ function emptySeries(days: number, end: Date): { date: string; count: number; am
 }
 
 export async function getPlatformMetrics() {
+  await refreshLiveFxBook();
   const now = new Date();
   const since30 = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
   since30.setUTCHours(0, 0, 0, 0);

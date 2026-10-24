@@ -1,4 +1,4 @@
-/** Display + FX helpers. Payments always use the invoice's own currency. */
+/** Display FX and crypto settlement. Rates come from a live book — never a hardcoded NGN peg. */
 
 export const DEFAULT_DISPLAY_CURRENCY = "USD";
 
@@ -70,25 +70,63 @@ export const COUNTRY_OPTIONS = [
   { code: "IT", label: "Italy" },
 ] as const;
 
-/**
- * Approximate units of currency per 1 USD (display conversion only).
- * Not for settlement — payments stay in invoice currency.
- */
-const UNITS_PER_USD: Record<string, number> = {
-  USD: 1,
-  USDC: 1,
-  USDT: 1,
-  EURC: 1,
-  EUR: 0.92,
-  GBP: 0.79,
-  NGN: 1600,
-  GHS: 15.5,
-  KES: 129,
-  ZAR: 18.5,
-  CAD: 1.36,
-  AUD: 1.53,
-  INR: 83,
+export type FxSource =
+  | "identity"
+  | "circle_par"
+  | "circle_cpn"
+  | "circle_mint"
+  | "coinbase"
+  | "coingecko"
+  | "open_er"
+  | "ecb_frankfurter"
+  | "test";
+
+export type FxBook = {
+  unitsPerUsd: Record<string, number>;
+  sources: Record<string, FxSource>;
+  fetchedAt: string;
+  expiresAt: number;
+  quoteId?: string;
 };
+
+const PAR: Record<string, number> = { USD: 1, USDC: 1, USDT: 1 };
+
+let liveBook: FxBook | null = null;
+
+export function peekFxBook(): FxBook | null {
+  return liveBook;
+}
+
+export function fxBookIsFresh(book: FxBook | null = liveBook, now = Date.now()) {
+  return Boolean(book && book.expiresAt > now);
+}
+
+export function replaceFxBook(book: FxBook): FxBook {
+  liveBook = book;
+  return book;
+}
+
+/** Tests only — never a production settlement path. */
+export function setFxBookForTests(unitsPerUsd: Record<string, number>, ttlMs = 60_000) {
+  const sources: Record<string, FxSource> = {};
+  for (const code of Object.keys(unitsPerUsd)) sources[code] = "test";
+  return replaceFxBook({
+    unitsPerUsd: { ...PAR, ...unitsPerUsd },
+    sources: { USD: "identity", USDC: "circle_par", USDT: "circle_par", ...sources },
+    fetchedAt: new Date().toISOString(),
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+export function clearFxBookForTests() {
+  liveBook = null;
+}
+
+function unitsPerUsd(currency: string): number | undefined {
+  const code = normalizeCurrency(currency);
+  if (PAR[code]) return PAR[code];
+  return liveBook?.unitsPerUsd[code];
+}
 
 export function currencyFromCountry(country: string | null | undefined): string {
   const code = (country || "").trim().toUpperCase().slice(0, 2);
@@ -115,6 +153,57 @@ export function resolveDisplayCurrency(org: {
   return currencyFromCountry(org.country);
 }
 
+export type ArcSettlement = {
+  amount: number;
+  currency: "USDC";
+  sourceAmount: number;
+  sourceCurrency: string;
+  quoted: boolean;
+  unitsPerUsd?: number;
+  source?: FxSource;
+  fetchedAt?: string;
+  quoteId?: string;
+};
+
+/** USDC to send on Arc when the bill is in another currency. Requires a live book. */
+export function settleArcAmount(amount: number, currency: string | null | undefined): ArcSettlement {
+  const sourceCurrency = normalizeCurrency(currency || "NGN");
+  if (sourceCurrency === "USDC" || sourceCurrency === "USD") {
+    return {
+      amount,
+      currency: "USDC",
+      sourceAmount: amount,
+      sourceCurrency,
+      quoted: true,
+      unitsPerUsd: 1,
+      source: sourceCurrency === "USDC" ? "circle_par" : "identity",
+    };
+  }
+  const rate = unitsPerUsd(sourceCurrency);
+  const book = peekFxBook();
+  if (!rate) {
+    return {
+      amount: 0,
+      currency: "USDC",
+      sourceAmount: amount,
+      sourceCurrency,
+      quoted: false,
+    };
+  }
+  const converted = amount / rate;
+  return {
+    amount: Math.round(converted * 1e6) / 1e6,
+    currency: "USDC",
+    sourceAmount: amount,
+    sourceCurrency,
+    quoted: true,
+    unitsPerUsd: rate,
+    source: book?.sources[sourceCurrency],
+    fetchedAt: book?.fetchedAt,
+    quoteId: book?.quoteId,
+  };
+}
+
 export function convertAmount(
   amount: number,
   fromCurrency: string | null | undefined,
@@ -123,8 +212,8 @@ export function convertAmount(
   const from = normalizeCurrency(fromCurrency);
   const to = normalizeCurrency(toCurrency);
   if (from === to) return amount;
-  const fromRate = UNITS_PER_USD[from];
-  const toRate = UNITS_PER_USD[to];
+  const fromRate = unitsPerUsd(from);
+  const toRate = unitsPerUsd(to);
   if (!fromRate || !toRate) {
     // Unknown pair: return as-is rather than inventing a rate
     return amount;

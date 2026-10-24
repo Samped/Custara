@@ -100,7 +100,7 @@ export default async function HomePage() {
           <div className="product-side">
             <p className="product-kicker">Command line</p>
             <h2>Install the CLI</h2>
-            <p className="product-note">From a checkout of the repository. Node.js 20 or newer.</p>
+            <p className="product-note">From a checkout of the repository. Node.js 22.</p>
             <div className="product-cli">
               <div className="product-cli-head">
                 <span>CLI</span>

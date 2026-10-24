@@ -1,8 +1,32 @@
 import { prisma } from "@/lib/db";
-import { loadPolicyRules } from "@/domain/policy";
+import { dropStaleContractRequired, loadPolicyRules } from "@/domain/policy";
 import { assertSpendLimits } from "@/domain/arc/allowlist";
 import { getPayingAgentWallet } from "@/domain/arc/wallets";
 import { screenDestination, screenPayAddress } from "@/domain/screening";
+
+/** Hard risks that still stop pay after approval and the live policy. */
+export function payBlockingHardRisks(
+  risks: Array<{ code: string; severity: string }>,
+  opts: {
+    requirePurchaseOrder?: boolean;
+    invoiceStatus?: string;
+    ignoreDestinationAllowlist?: boolean;
+  },
+) {
+  return risks.filter((r) => {
+    if (r.severity !== "hard") return false;
+    if (r.code === "destination_not_allowlisted" && opts.ignoreDestinationAllowlist) {
+      return false;
+    }
+    if (r.code === "contract_required") {
+      if (!opts.requirePurchaseOrder) return false;
+      if (["approved", "payment_queued", "payment_sent"].includes(opts.invoiceStatus || "")) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
 
 /**
  * Pay-time re-checks before creating/executing a payment intent.
@@ -25,21 +49,21 @@ export async function assertPayTimeGuards(input: {
   });
   if (!invoice) throw new Error("Invoice not found for pay-time guards");
 
-  // Stale destination_not_allowlisted is ignored when pay-time allowlist check will pass.
-  const hard = invoice.risks.filter((r) => {
-    if (r.severity !== "hard") return false;
-    if (r.code === "destination_not_allowlisted" && input.rail === "arc_usdc" && input.arcAddress) {
-      return false;
-    }
-    return true;
+  const rules = await loadPolicyRules(input.organizationId);
+  if (!rules.requirePurchaseOrder) {
+    await dropStaleContractRequired(input.organizationId, rules);
+  }
+
+  const hard = payBlockingHardRisks(invoice.risks, {
+    requirePurchaseOrder: rules.requirePurchaseOrder,
+    invoiceStatus: invoice.status,
+    ignoreDestinationAllowlist: input.rail === "arc_usdc" && Boolean(input.arcAddress),
   });
   if (hard.length) {
     throw new Error(
       `Pay blocked: hard risks still present (${hard.map((r) => r.code).join(", ")})`,
     );
   }
-
-  const rules = await loadPolicyRules(input.organizationId);
   const floor = rules.minConfidenceForAutoApprove ?? 0.6;
   const confidence = invoice.extraction?.confidence ?? 0;
   if (confidence < floor) {

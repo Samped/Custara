@@ -55,23 +55,44 @@ export function getArcExecutionMode(orgPaymentMode: "sandbox" | "live" | string)
   return "testnet";
 }
 
+export function arcNetworkCopy(mode: ArcExecutionMode) {
+  if (mode === "mainnet") return "Arc mainnet";
+  if (mode === "testnet") return "Arc testnet";
+  if (mode === "simulated") return "simulated Arc";
+  return "Arc pay gated";
+}
+
+export function mainnetPayGated() {
+  return getArcChain() === "ARC" && process.env.ARC_PAYMENTS_LIVE !== "true";
+}
+
 /** Live Arc transfers require sandbox→live org mode AND explicit env gate. */
 export function assertArcPaymentsAllowed(mode: "sandbox" | "live") {
   if (mode === "sandbox") {
     if (!allowSimulatedArc()) {
       throw new Error(
-        "Simulated Arc payments are disabled. Set org Payment mode to live (Arc testnet) in Settings, with ARC_PAYMENTS_LIVE=true and ARC_ALLOW_LIVE_ON_TESTNET=true.",
+        "Simulated Arc payments are disabled. Set org Payment mode to live in Settings, with ARC_PAYMENTS_LIVE=true.",
       );
     }
     return;
   }
   if (process.env.ARC_PAYMENTS_LIVE !== "true") {
-    throw new Error("Live Arc payments disabled. Set ARC_PAYMENTS_LIVE=true after compliance clearance.");
+    throw new Error(
+      getArcChain() === "ARC"
+        ? "Mainnet Arc pay is gated. Fund the Circle agent and fee wallet, then set ARC_PAYMENTS_LIVE=true."
+        : "Live Arc payments disabled. Set ARC_PAYMENTS_LIVE=true after compliance clearance.",
+    );
   }
   if (getArcChain() === "ARC-TESTNET" && process.env.ARC_ALLOW_LIVE_ON_TESTNET !== "true") {
     throw new Error(
       "Live mode on ARC-TESTNET blocked. Set ARC_ALLOW_LIVE_ON_TESTNET=true for enterprise testnet drills, or ARC_CHAIN=ARC for mainnet.",
     );
+  }
+  if (getArcChain() === "ARC") {
+    getUsdcTokenAddress();
+    if (!process.env.PLATFORM_FEE_ADDRESS?.trim()) {
+      throw new Error("PLATFORM_FEE_ADDRESS is required before live mainnet pay.");
+    }
   }
   requireCircleOrThrow("Arc transfer");
 }

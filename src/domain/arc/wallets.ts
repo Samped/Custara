@@ -473,12 +473,14 @@ export async function applyAgentSpend(input: {
   organizationId: string;
   paymentIntentId: string;
   amount: number;
+  spendKey?: string;
 }) {
+  const entityId = input.spendKey || input.paymentIntentId;
   const already = await prisma.auditEvent.findFirst({
     where: {
       organizationId: input.organizationId,
       action: "wallet.balance_spent",
-      entityId: input.paymentIntentId,
+      entityId,
     },
     select: { id: true },
   });
@@ -508,8 +510,8 @@ export async function applyAgentSpend(input: {
     actorType: "system",
     action: "wallet.balance_spent",
     entityType: "payment_intent",
-    entityId: input.paymentIntentId,
-    metadata: { amount: input.amount, before, balance },
+    entityId,
+    metadata: { amount: input.amount, before, balance, paymentIntentId: input.paymentIntentId },
   });
 }
 

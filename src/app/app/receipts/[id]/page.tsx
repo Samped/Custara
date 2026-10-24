@@ -17,6 +17,7 @@ import {
   shortHash,
   statusBadgeClass,
 } from "@/lib/format";
+import { formatBps } from "@/domain/platformFee";
 
 function field(label: string, value: ReactNode) {
   return (
@@ -120,6 +121,12 @@ export default async function ReceiptDetailPage({
             {field("Mode", intent.mode)}
             {field("Rail", intent.rail)}
             {field("Amount", formatMoney(intent.amount, intent.currency))}
+            {intent.feeAmount
+              ? field(
+                  "Custara fee",
+                  `${formatMoney(intent.feeAmount, "USDC")}${intent.feeBps != null ? ` (${formatBps(intent.feeBps)})` : ""}`,
+                )
+              : null}
             {field("Status", paymentStatusLabel(intent.status))}
             {field("Created", formatDate(intent.createdAt))}
             {field("Updated", formatDate(intent.updatedAt))}
@@ -131,6 +138,21 @@ export default async function ReceiptDetailPage({
                 "—"
               ),
             )}
+            {intent.feeTxHash
+              ? field(
+                  "Fee tx",
+                  <a
+                    href={arcExplorerTxUrl(intent.feeTxHash)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[0.75rem] text-accent hover:underline"
+                  >
+                    {intent.feeTxHash}
+                  </a>,
+                )
+              : intent.feeAmount
+                ? field("Fee tx", intent.feeCircleTxId ? "Pending" : "Retrying")
+                : null}
             {field(
               "Tx hash",
               txHash ? (

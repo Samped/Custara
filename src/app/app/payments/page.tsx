@@ -15,15 +15,13 @@ import {
   shortHash,
   statusBadgeClass,
 } from "@/lib/format";
-import { getArcExecutionMode } from "@/domain/arc/config";
+import { arcNetworkCopy, getArcExecutionMode, mainnetPayGated } from "@/domain/arc/config";
 import { InvoiceActionForm } from "@/components/app/InvoiceActionForm";
 import { invoiceOpenAmount } from "@/domain/apLedger";
 import { listPayRunCandidates } from "@/domain/payRun";
 import { canPay } from "@/lib/auth";
-
-function arcExplorerTxUrl(txHash: string) {
-  return `https://testnet.arcscan.app/tx/${txHash}`;
-}
+import { platformFeeUsdc } from "@/domain/platformFee";
+import { arcExplorerTxUrl } from "@/domain/receipts";
 
 export default async function PaymentsPage({
   searchParams,
@@ -38,6 +36,9 @@ export default async function PaymentsPage({
   }
   const params = await searchParams;
   const tab = params.tab === "wallets" ? "wallets" : params.tab === "run" ? "run" : "intents";
+  const execution = getArcExecutionMode(user.paymentMode);
+  const networkCopy = arcNetworkCopy(execution);
+  const payGated = execution === "blocked" || mainnetPayGated();
 
   const tabs = [
     { id: "intents", label: "Intents", href: "/app/payments" },
@@ -74,11 +75,18 @@ export default async function PaymentsPage({
       <AppShell user={user} title="Pay">
         <SectionTabs tabs={tabs} active="run" />
         {params.run ? (
-          <p className="dash-panel mt-4 mb-3 text-[0.78rem] text-accent">Pay run {params.run.slice(0, 8)} submitted on Arc testnet.</p>
+          <p className="dash-panel mt-4 mb-3 text-[0.78rem] text-accent">Pay run {params.run.slice(0, 8)} submitted on {networkCopy}.</p>
+        ) : null}
+        {payGated ? (
+          <p className="dash-panel mt-4 mb-3 text-[0.78rem] text-danger">
+            {mainnetPayGated()
+              ? "Mainnet pay is gated until the Circle agent and fee wallet are funded (ARC_PAYMENTS_LIVE=false)."
+              : "Arc pay is unavailable on this host. Check Settings payment mode and Circle keys."}
+          </p>
         ) : null}
         <section className="dash-panel mt-4">
           <h2 className="dash-h">Approved bills</h2>
-          <p className="dash-sub mt-1">Select bills, then settle residual on Arc testnet in one MFA step.</p>
+          <p className="dash-sub mt-1">Select bills, then settle residual on {networkCopy} in one MFA step. The buyer pays the vendor in full plus a disclosed Custara fee.</p>
           {canPay(user.role) ? (
             <InvoiceActionForm action="create_pay_run" className="mt-4 space-y-3">
               {candidates.map((inv) => (
@@ -90,7 +98,14 @@ export default async function PaymentsPage({
                     </Link>
                     <span className="text-muted">{inv.vendor?.name || "Vendor"}</span>
                   </span>
-                  <span>{formatMoney(invoiceOpenAmount(inv), inv.currency)}</span>
+                  <span className="text-right">
+                    {formatMoney(invoiceOpenAmount(inv), inv.currency)}
+                    {inv.currency === "USDC" || inv.currency === "USD"
+                      ? platformFeeUsdc(invoiceOpenAmount(inv)) > 0
+                        ? ` + ${formatMoney(platformFeeUsdc(invoiceOpenAmount(inv)), "USDC")} fee`
+                        : ""
+                      : ""}
+                  </span>
                 </label>
               ))}
               {!candidates.length ? <p className="text-sm text-muted">No approved bills ready to pay.</p> : null}
@@ -100,8 +115,8 @@ export default async function PaymentsPage({
                     Step-up MFA (if required)
                     <input name="mfaCode" className="input mt-1" inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit TOTP" />
                   </label>
-                  <button type="submit" className="btn btn-primary">
-                    Pay selected on Arc testnet
+                  <button type="submit" className="btn btn-primary" disabled={payGated}>
+                    Pay selected on {networkCopy}
                   </button>
                 </>
               ) : null}
@@ -130,7 +145,6 @@ export default async function PaymentsPage({
     include: { invoice: true },
     orderBy: { createdAt: "desc" },
   });
-  const execution = getArcExecutionMode(user.paymentMode);
 
   return (
     <AppShell user={user} title="Pay">
@@ -140,18 +154,18 @@ export default async function PaymentsPage({
         <div className="dash-panel mt-4 mb-3 text-[0.78rem] text-accent">Payment queued.</div>
       ) : null}
 
+      {payGated ? (
+        <p className="dash-panel mt-4 mb-3 text-[0.78rem] text-danger">
+          {mainnetPayGated()
+            ? "Mainnet pay is gated until the Circle agent and fee wallet are funded."
+            : "Arc pay is unavailable on this host."}
+        </p>
+      ) : null}
+
       <section className="dash-panel mt-4 mb-4 flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <p className="dash-kicker">Rail</p>
-          <h2 className="dash-h">
-            {execution === "testnet"
-              ? "Arc testnet"
-              : execution === "mainnet"
-                ? "Arc mainnet"
-                : execution === "simulated"
-                  ? "Simulated"
-                  : "Unavailable"}
-          </h2>
+          <h2 className="dash-h">{networkCopy}</h2>
         </div>
       </section>
 
@@ -190,7 +204,12 @@ export default async function PaymentsPage({
                       {simulated ? " · demo" : ""}
                     </p>
                   </td>
-                  <td className="whitespace-nowrap">{formatMoney(intent.amount, intent.currency)}</td>
+                  <td className="whitespace-nowrap">
+                    {formatMoney(intent.amount, intent.currency)}
+                    {intent.feeAmount ? (
+                      <p className="dash-mini-meta">+ {formatMoney(intent.feeAmount, "USDC")} fee</p>
+                    ) : null}
+                  </td>
                   <td>
                     <span className={`badge ${statusBadgeClass(intent.status)}`}>
                       {paymentStatusLabel(intent.status)}

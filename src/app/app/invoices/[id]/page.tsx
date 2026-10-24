@@ -6,6 +6,9 @@ import { AppShell } from "@/components/app/AppShell";
 import { formatDate, formatMoney, statusBadgeClass } from "@/lib/format";
 import { convertAmount } from "@/lib/currency";
 import { fxSourceLabel, quoteArcSettlement, refreshLiveFxBook } from "@/domain/fx/liveQuote";
+import { formatBuyerPayLine } from "@/domain/platformFee";
+import { arcExplorerTxUrl } from "@/domain/receipts";
+import { arcNetworkCopy, getArcExecutionMode } from "@/domain/arc/config";
 import { InvoiceActionForm } from "@/components/app/InvoiceActionForm";
 import { MfaSetupRequired } from "@/components/app/MfaSetupRequired";
 import { invoiceOpenAmount, listOpenVendorCredits } from "@/domain/apLedger";
@@ -67,10 +70,10 @@ export default async function InvoiceWorkbenchPage({
   await refreshLiveFxBook();
   const payThresholdUsd = org.mfaPayThresholdUsd ?? 5000;
   const payAmountUsd = convertAmount(invoice.totalAmount || 0, invoice.currency, "USD");
+  const quoteSource = invoiceOpenAmount(invoice) || invoice.totalAmount;
   const cryptoQuote =
-    invoice.totalAmount != null
-      ? await quoteArcSettlement(invoice.totalAmount, invoice.currency)
-      : null;
+    quoteSource != null ? await quoteArcSettlement(quoteSource, invoice.currency) : null;
+  const networkCopy = arcNetworkCopy(getArcExecutionMode(user.paymentMode));
   const mfaRequiredForPay = payAmountUsd >= payThresholdUsd;
 
   const pendingApproval = invoice.approvalRequests.find((a) => a.status === "pending");
@@ -241,7 +244,7 @@ export default async function InvoiceWorkbenchPage({
                     : null;
                   return (
                     <p className="mt-1 text-[0.72rem] text-muted">
-                      Crypto: {formatMoney(cryptoQuote.amount, "USDC")} on Arc testnet
+                      Crypto: {formatMoney(cryptoQuote.amount, "USDC")} on {networkCopy}
                       {rate
                         ? ` · ${rate} / USDC · ${fxSourceLabel(cryptoQuote.source)}${quotedAt ? ` · ${quotedAt}` : ""}`
                         : ""}
@@ -486,7 +489,12 @@ export default async function InvoiceWorkbenchPage({
                   {needsVendorVerify ? " Verify vendor above." : ""}
                 </p>
               ) : (
-                <p className="app-sub">Creates a payment intent after policy checks.</p>
+                <p className="app-sub">
+                  Creates a payment intent after policy checks.
+                  {cryptoQuote?.quoted
+                    ? ` ${formatBuyerPayLine(cryptoQuote.amount)}.`
+                    : ""}
+                </p>
               )}
               {mfaRequiredForPay && !user.mfaEnabled ? null : (
                 <InvoiceActionForm
@@ -530,7 +538,7 @@ export default async function InvoiceWorkbenchPage({
                     className="btn btn-primary w-full"
                     disabled={hardRisks.length > 0}
                   >
-                    Initiate payment
+                    {cryptoQuote?.quoted ? formatBuyerPayLine(cryptoQuote.amount) : "Initiate payment"}
                   </button>
                 </InvoiceActionForm>
               )}
@@ -552,7 +560,11 @@ export default async function InvoiceWorkbenchPage({
                   <li key={intent.id}>
                     <span className={`badge ${statusBadgeClass(intent.status)}`}>{intent.status.replace(/_/g, " ")}</span>
                     <span className="ml-2 text-muted">
-                      {formatMoney(intent.amount, intent.currency)} · {formatDate(intent.createdAt)}
+                      {formatMoney(intent.amount, intent.currency)}
+                      {intent.feeAmount
+                        ? ` + ${formatMoney(intent.feeAmount, "USDC")} fee`
+                        : ""}{" "}
+                      · {formatDate(intent.createdAt)}
                     </span>
                   </li>
                 ))}
@@ -576,7 +588,7 @@ export default async function InvoiceWorkbenchPage({
               !String(latestIntent.circleTxId || "").startsWith("sbx_") ? (
                 <a
                   className="mt-3 inline-flex font-mono text-[0.78rem] text-accent hover:underline"
-                  href={`https://testnet.arcscan.app/tx/${latestIntent.txHash}`}
+                  href={arcExplorerTxUrl(latestIntent.txHash)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

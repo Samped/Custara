@@ -1,7 +1,8 @@
-# Free Render blueprint: worker web service, Postgres, and Key Value.
-# Background workers are not on the free plan, so the worker is a web service
-# that listens on PORT (see src/worker.ts). Postgres on the free plan expires
-# 30 days after creation. Key Value on the free plan does not persist.
+# TESTNET ONLY — https://testnet.custara.xyz
+# Do not point this database at custara.xyz or set ARC_CHAIN=ARC here.
+# Mainnet is render.mainnet.yaml (new Postgres, new worker, new secrets).
+# Free Render: worker is a web service (background workers are not free).
+# Postgres on the free plan expires 30 days after creation.
 services:
   - type: web
     name: custara-worker
@@ -17,9 +18,17 @@ services:
       - key: NODE_ENV
         value: production
       - key: APP_URL
-        value: https://custara.xyz
+        value: https://testnet.custara.xyz
       - key: NEXT_PUBLIC_APP_URL
-        value: https://custara.xyz
+        value: https://testnet.custara.xyz
+      - key: PLATFORM_FEE_BPS
+        value: "75"
+      - key: PLATFORM_FEE_MIN_USDC
+        value: "0.10"
+      - key: PLATFORM_FEE_ADDRESS
+        sync: false
+      - key: REDIRECT_APEX_TO_TESTNET
+        value: "false"
       - key: DATABASE_URL
         fromDatabase:
           name: custara-postgres
@@ -30,6 +39,10 @@ services:
           name: custara-redis
           property: connectionString
       - key: ARC_PAYMENTS_LIVE
+        value: "true"
+      - key: ARC_CHAIN
+        value: ARC-TESTNET
+      - key: ARC_ALLOW_LIVE_ON_TESTNET
         value: "true"
       - key: ARC_ALLOW_SIMULATED
         value: "false"
@@ -42,10 +55,6 @@ services:
       - key: SESSION_SECRET
         sync: false
       - key: ENCRYPTION_KEY
-        sync: false
-      - key: ARC_CHAIN
-        sync: false
-      - key: ARC_ALLOW_LIVE_ON_TESTNET
         sync: false
       - key: ARC_USDC_TOKEN_ADDRESS
         sync: false

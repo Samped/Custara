@@ -23,11 +23,13 @@ export function SettingsJsonForm({
   children,
   className,
   transform,
+  busyLabel = "Saving…",
 }: {
   action: string;
   children: ReactNode;
   className?: string;
   transform?: (fd: FormData, body: Record<string, unknown>) => void;
+  busyLabel?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -88,7 +90,7 @@ export function SettingsJsonForm({
     <form onSubmit={onSubmit} className={className}>
       {children}
       {error ? <p className="mt-2 text-[0.72rem] text-danger md:col-span-2">{error}</p> : null}
-      {busy ? <p className="mt-1 text-[0.65rem] text-muted md:col-span-2">Saving…</p> : null}
+      {busy ? <p className="mt-1 text-[0.65rem] text-muted md:col-span-2">{busyLabel}</p> : null}
     </form>
   );
 }

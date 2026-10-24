@@ -16,11 +16,19 @@ import {
   processLocalSftpDrop,
   pullRemoteSftpIfConfigured,
 } from "@/domain/sftpIngest";
+import { ensureOdooConnector, listOdooWritebackFailures } from "@/domain/connectors/odoo";
 
 export default async function ConnectorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sftp?: string; mailbox?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    sftp?: string;
+    mailbox?: string;
+    odoo?: string;
+    ingested?: string;
+    vendors?: string;
+  }>;
 }) {
   let user;
   try {
@@ -32,6 +40,20 @@ export default async function ConnectorsPage({
   const params = await searchParams;
   await ensureMailboxConnector(user.organizationId);
   const sftp = await ensureSftpConnector(user.organizationId);
+  const odoo = await ensureOdooConnector(user.organizationId);
+  const odooConfig = JSON.parse(odoo.configJson || "{}") as {
+    origin?: string;
+    database?: string;
+    username?: string;
+    lastError?: string | null;
+    companyId?: number | null;
+    journalId?: number | null;
+    companies?: Array<{ id: number; name: string }>;
+    truncated?: boolean;
+    lastSyncSummary?: { vendors?: number; ingested?: number; truncated?: boolean };
+  };
+  const odooFailures = await listOdooWritebackFailures(user.organizationId);
+  const odooSecrets = JSON.parse(odoo.secretsJson || "{}") as { apiKeyEnc?: string };
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: user.organizationId },
@@ -114,6 +136,22 @@ export default async function ConnectorsPage({
       {params.mailbox === "saved" ? (
         <p className="mb-4 text-sm text-accent">Mailbox connected. Polling uses the saved IMAP settings.</p>
       ) : null}
+      {params.odoo === "synced" ? (
+        <p className="mb-4 text-sm text-accent">
+          Odoo sync finished
+          {params.ingested ? ` · ${params.ingested} new bills` : ""}
+          {params.vendors ? ` · ${params.vendors} vendors` : ""}.
+        </p>
+      ) : null}
+      {params.odoo === "connected" ? (
+        <p className="mb-4 text-sm text-accent">Odoo connected. Run Sync if the first pull did not finish.</p>
+      ) : null}
+      {params.odoo === "disconnected" ? (
+        <p className="mb-4 text-sm text-accent">Odoo disconnected. The API key was removed.</p>
+      ) : null}
+      {params.odoo === "retry" ? (
+        <p className="mb-4 text-sm text-accent">Retrying failed Odoo write-backs.</p>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="dash-panel">
@@ -170,6 +208,125 @@ export default async function ConnectorsPage({
               Save mailbox
             </button>
           </SettingsJsonForm>
+        </section>
+
+        <section className="dash-panel">
+          <h2 className="dash-h">Odoo</h2>
+          <p className="mt-3 text-[0.78rem] text-muted">
+            Odoo stays the ledger. Custara is approvals, risk, and Arc <strong>testnet</strong> USDC
+            settlement. Dual control and payment MFA live under Controls and Security.
+          </p>
+          <p className="mt-2 text-[0.72rem] text-muted">
+            {odoo.status === "connected" && odooConfig.origin
+              ? `Connected to ${odooConfig.origin.replace(/^https?:\/\//, "")} as ${odooConfig.username || user.email}`
+              : "Disconnected"}
+            {odoo.lastSyncAt ? ` · last sync ${odoo.lastSyncAt.toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}
+            {odooConfig.lastSyncSummary
+              ? ` · ${odooConfig.lastSyncSummary.ingested || 0} bills / ${odooConfig.lastSyncSummary.vendors || 0} vendors`
+              : ""}
+          </p>
+          {odooConfig.truncated ? (
+            <p className="mt-2 text-[0.72rem] text-warn">
+              Last sync hit the record cap. Older Odoo rows were skipped — use Sync now after the first
+              pull, or raise the cap in a follow-up.
+            </p>
+          ) : null}
+          {odooConfig.lastError ? (
+            <p className="mt-2 text-[0.72rem] text-danger">{odooConfig.lastError}</p>
+          ) : null}
+          <SettingsJsonForm action="save_odoo" busyLabel="Connecting…" className="mt-4 grid gap-3">
+            <label className="text-sm">
+              Database URL
+              <input
+                name="url"
+                type="url"
+                inputMode="url"
+                autoComplete="url"
+                className="input mt-1"
+                placeholder="https://your-company.odoo.com"
+                defaultValue={odooConfig.origin || ""}
+                required
+              />
+              <span className="mt-1 block text-[0.72rem] text-muted">
+                Copy this from the address bar on Discuss or Accounting. Example: https://acme.odoo.com
+              </span>
+            </label>
+            <label className="text-sm">
+              Odoo user email
+              <input
+                name="username"
+                type="email"
+                className="input mt-1"
+                placeholder={user.email}
+                defaultValue={odooConfig.username || ""}
+              />
+            </label>
+            {odooConfig.companies && odooConfig.companies.length > 1 ? (
+              <label className="text-sm">
+                Company
+                <select name="companyId" className="input mt-1" defaultValue={odooConfig.companyId || ""}>
+                  <option value="">Default company</option>
+                  {odooConfig.companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="text-sm">
+              Payment journal id
+              <input
+                name="journalId"
+                className="input mt-1"
+                placeholder="Odoo Bank journal id"
+                defaultValue={odooConfig.journalId || ""}
+              />
+            </label>
+            <label className="text-sm">
+              API key
+              <input
+                name="apiKey"
+                type="password"
+                autoComplete="new-password"
+                className="input mt-1"
+                placeholder={odooSecrets.apiKeyEnc ? "Leave blank to keep the saved key" : "Odoo API key"}
+                required={!odooSecrets.apiKeyEnc}
+              />
+            </label>
+            <button type="submit" className="btn btn-primary w-fit">
+              Connect
+            </button>
+          </SettingsJsonForm>
+          {odoo.status === "connected" || odoo.status === "error" ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <SettingsJsonForm action="sync_odoo" busyLabel="Syncing…">
+                <button type="submit" className="btn btn-secondary w-fit">
+                  Sync now
+                </button>
+              </SettingsJsonForm>
+              <SettingsJsonForm action="retry_odoo_writebacks" busyLabel="Retrying…">
+                <button type="submit" className="btn btn-secondary w-fit">
+                  Retry failed write-backs
+                </button>
+              </SettingsJsonForm>
+              <SettingsJsonForm action="disconnect_odoo" busyLabel="Disconnecting…">
+                <button type="submit" className="btn btn-secondary w-fit">
+                  Disconnect
+                </button>
+              </SettingsJsonForm>
+            </div>
+          ) : null}
+          {odooFailures.length ? (
+            <div className="mt-4 rounded-xl border border-line px-3 py-2">
+              <p className="text-[0.72rem] font-medium">Failed Odoo write-backs</p>
+              {odooFailures.map((row) => (
+                <p key={row.id} className="mt-1 text-[0.7rem] text-muted">
+                  {row.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC · {row.error}
+                </p>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         <section className="dash-panel">

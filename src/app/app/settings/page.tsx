@@ -81,7 +81,7 @@ export default async function SettingsPage({
             <input
               name="website"
               className="input mt-1"
-              placeholder="https://acme.example"
+              placeholder="https://company.odoo.com"
               defaultValue={org.website || ""}
             />
           </label>

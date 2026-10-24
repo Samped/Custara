@@ -186,6 +186,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, redirectTo: "/app/connectors?mailbox=saved" });
     }
 
+    if (action === "save_odoo") {
+      const url = String(body.url || "").trim();
+      if (!url) {
+        return NextResponse.json({ error: "Odoo database URL is required." }, { status: 400 });
+      }
+      const { connectOdoo, syncOdooInbound } = await import("@/domain/connectors/odoo");
+      await connectOdoo({
+        organizationId: user.organizationId,
+        actorId: user.id,
+        actorEmail: user.email,
+        url,
+        apiKey: body.apiKey ? String(body.apiKey) : undefined,
+        username: body.username ? String(body.username) : undefined,
+        companyId: body.companyId ? Number(body.companyId) : undefined,
+        journalId: body.journalId ? Number(body.journalId) : undefined,
+      });
+      try {
+        await syncOdooInbound({ organizationId: user.organizationId, actorId: user.id });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Odoo connected, first sync failed";
+        return NextResponse.json({
+          ok: true,
+          redirectTo: `/app/connectors?odoo=connected&error=${encodeURIComponent(message.slice(0, 120))}`,
+        });
+      }
+      return NextResponse.json({ ok: true, redirectTo: "/app/connectors?odoo=synced" });
+    }
+
+    if (action === "sync_odoo") {
+      const { syncOdooInbound } = await import("@/domain/connectors/odoo");
+      const summary = await syncOdooInbound({
+        organizationId: user.organizationId,
+        actorId: user.id,
+      });
+      return NextResponse.json({
+        ok: true,
+        redirectTo: `/app/connectors?odoo=synced&ingested=${summary.ingested}&vendors=${summary.vendors}`,
+      });
+    }
+
+    if (action === "retry_odoo_writebacks") {
+      const { retryFailedOdooWritebacks } = await import("@/domain/connectors/odoo");
+      await retryFailedOdooWritebacks(user.organizationId);
+      return NextResponse.json({ ok: true, redirectTo: "/app/connectors?odoo=retry" });
+    }
+
+    if (action === "disconnect_odoo") {
+      const { disconnectOdoo } = await import("@/domain/connectors/odoo");
+      await disconnectOdoo({ organizationId: user.organizationId, actorId: user.id });
+      return NextResponse.json({ ok: true, redirectTo: "/app/connectors?odoo=disconnected" });
+    }
+
     if (action === "save_org") {
       const paymentMode = String(body.paymentMode || "sandbox");
       const nextMode = paymentMode === "live" ? "live" : "sandbox";

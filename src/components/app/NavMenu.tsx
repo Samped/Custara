@@ -15,6 +15,7 @@ const nav = [
   { href: "/app/roles", label: "Roles", group: "Admin" },
   { href: "/app/security", label: "Security", group: "Admin" },
   { href: "/app/settings", label: "Settings", group: "Admin" },
+  { href: "/app/connectors", label: "Connectors", group: "Admin" },
 ];
 
 function currentLabel(pathname: string) {

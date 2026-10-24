@@ -3,8 +3,11 @@ import { writeAudit } from "@/lib/audit";
 import { dispatchWebhook } from "@/lib/webhooks";
 import { OPEN_INVOICE_STATUSES } from "@/domain/openInvoices";
 import { convertAmount, resolveDisplayCurrency, sumInCurrency } from "@/lib/currency";
+import { refreshLiveFxBook } from "@/domain/fx/liveQuote";
+import { getAgedPayable, invoiceOpenAmount } from "@/domain/apLedger";
 
 export async function getCashForecast(organizationId: string) {
+  await refreshLiveFxBook();
   const org = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
   const displayCurrency = resolveDisplayCurrency(org);
   const now = new Date();
@@ -20,6 +23,7 @@ export async function getCashForecast(organizationId: string) {
     select: {
       id: true,
       totalAmount: true,
+      residualAmount: true,
       currency: true,
       dueDate: true,
     },
@@ -29,7 +33,7 @@ export async function getCashForecast(organizationId: string) {
   const due30 = invoices.filter((i) => i.dueDate && i.dueDate <= in30);
   const sumDisplay = (rows: typeof invoices) =>
     sumInCurrency(
-      rows.map((i) => ({ amount: i.totalAmount, currency: i.currency })),
+      rows.map((i) => ({ amount: invoiceOpenAmount(i), currency: i.currency })),
       displayCurrency,
     );
 
@@ -42,6 +46,7 @@ export async function getCashForecast(organizationId: string) {
 
   const { listSuggestedPays } = await import("@/domain/timing");
   const suggested = await listSuggestedPays(organizationId);
+  const aged = await getAgedPayable(organizationId);
 
   return {
     currency: displayCurrency,
@@ -65,6 +70,7 @@ export async function getCashForecast(organizationId: string) {
       due_date: i.dueDate?.toISOString() || null,
     })),
     auto_pay_enabled: org.autoPayEnabled,
+    aged,
   };
 }
 

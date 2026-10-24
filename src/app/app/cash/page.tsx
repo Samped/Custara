@@ -164,6 +164,27 @@ export default async function CashPage({
           </dl>
         </section>
 
+        {forecast.aged ? (
+          <section className="dash-panel">
+            <h2 className="dash-h">Aged payable</h2>
+            <p className="dash-sub mt-1">Open residual by how late the bill is.</p>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+              {[
+                ["Current", forecast.aged.current],
+                ["1–30", forecast.aged.d1_30],
+                ["31–60", forecast.aged.d31_60],
+                ["61–90", forecast.aged.d61_90],
+                ["90+", forecast.aged.d90],
+              ].map(([label, value]) => (
+                <div key={label as string}>
+                  <p className="text-[0.7rem] uppercase tracking-wide text-muted">{label as string}</p>
+                  <p className="font-semibold">{formatMoney(value as number, forecast.currency)}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <section className="dash-panel">
           <div className="dash-panel-head">
             <div>

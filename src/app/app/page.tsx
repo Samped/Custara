@@ -115,6 +115,31 @@ export default async function DashboardPage() {
           ))}
         </section>
 
+        {dash.forecast.aged ? (
+          <section className="dash-panel">
+            <div className="dash-panel-head">
+              <h2 className="dash-h">Aged payable</h2>
+              <Link href="/app/cash" className="dash-link">
+                Cash
+              </Link>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+              {[
+                ["Current", dash.forecast.aged.current],
+                ["1–30", dash.forecast.aged.d1_30],
+                ["31–60", dash.forecast.aged.d31_60],
+                ["61–90", dash.forecast.aged.d61_90],
+                ["90+", dash.forecast.aged.d90],
+              ].map(([label, value]) => (
+                <div key={label as string}>
+                  <p className="text-[0.7rem] uppercase tracking-wide text-muted">{label as string}</p>
+                  <p className="font-semibold">{formatMoney(value as number, currency)}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {dash.pendingApprovals.length > 0 ? (
           <section className="dash-panel dash-panel-flush">
             <div className="dash-panel-head dash-panel-pad">

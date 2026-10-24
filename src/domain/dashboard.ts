@@ -2,12 +2,15 @@ import { prisma } from "@/lib/db";
 import { getCashForecast } from "@/domain/cash";
 import { OPEN_INVOICE_STATUSES } from "@/domain/openInvoices";
 import { convertAmount, resolveDisplayCurrency } from "@/lib/currency";
+import { invoiceOpenAmount } from "@/domain/apLedger";
+import { refreshLiveFxBook } from "@/domain/fx/liveQuote";
 
 function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
 export async function getDashboardSummary(organizationId: string) {
+  await refreshLiveFxBook();
   const now = new Date();
   const since = new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000);
   since.setUTCHours(0, 0, 0, 0);
@@ -46,7 +49,7 @@ export async function getDashboardSummary(organizationId: string) {
         status: { in: [...OPEN_INVOICE_STATUSES] },
         totalAmount: { not: null },
       },
-      select: { totalAmount: true, currency: true },
+      select: { totalAmount: true, residualAmount: true, currency: true },
     }),
     prisma.approvalRequest.findMany({
       where: {
@@ -117,7 +120,7 @@ export async function getDashboardSummary(organizationId: string) {
 
   const openInvoiceCount = openInvoicesForSum.length;
   const openInvoiceAmount = openInvoicesForSum.reduce(
-    (acc, inv) => acc + convertAmount(inv.totalAmount || 0, inv.currency, displayCurrency),
+    (acc, inv) => acc + convertAmount(invoiceOpenAmount(inv), inv.currency, displayCurrency),
     0,
   );
 

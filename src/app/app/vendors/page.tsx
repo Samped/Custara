@@ -10,6 +10,8 @@ import { addDestination } from "@/domain/arc/allowlist";
 import { writeAudit } from "@/lib/audit";
 import { encryptField, last4 } from "@/lib/crypto";
 import { upsertVendorPurchaseOrder } from "@/domain/contracts";
+import { invoiceOpenAmount } from "@/domain/apLedger";
+import Link from "next/link";
 
 export default async function VendorsPage({
   searchParams,
@@ -55,6 +57,10 @@ export default async function VendorsPage({
         where: { status: "open" },
         orderBy: { createdAt: "desc" },
         take: 20,
+      },
+      invoices: {
+        where: { status: { in: ["approved", "pending_approval", "needs_review", "received", "extracting"] } },
+        select: { residualAmount: true, totalAmount: true, currency: true },
       },
     },
     orderBy: { name: "asc" },
@@ -189,8 +195,22 @@ export default async function VendorsPage({
             <div key={vendor.id} className="card p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="app-h">{vendor.name}</h2>
-                  <p className="app-sub">{vendor.email || vendor.externalId || vendor.id}</p>
+                  <h2 className="app-h">
+                    <Link href={`/app/vendors/${vendor.id}`} className="hover:underline">
+                      {vendor.name}
+                    </Link>
+                  </h2>
+                  <p className="app-sub">
+                    {vendor.taxId ? `VAT ${vendor.taxId} · ` : ""}
+                    {vendor.paymentTerm ? `${vendor.paymentTerm} · ` : ""}
+                    {vendor.email || vendor.externalId || vendor.id}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    Open {formatMoney(
+                      vendor.invoices.reduce((n, inv) => n + invoiceOpenAmount(inv), 0),
+                      vendor.invoices[0]?.currency || "NGN",
+                    )}
+                  </p>
                 </div>
                 {vendor.isNew ? <span className="badge bg-amber-50 text-warn">new vendor</span> : null}
               </div>

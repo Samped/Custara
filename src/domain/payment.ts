@@ -9,6 +9,7 @@ import { ensureAgentWallet } from "@/domain/arc/wallets";
 import { convertAmount } from "@/lib/currency";
 import { quoteArcSettlement, refreshLiveFxBook } from "@/domain/fx/liveQuote";
 import { assertFiscalUnlocked, invoiceOpenAmount, listOpenVendorCredits } from "@/domain/apLedger";
+import { describePlatformFee } from "@/domain/platformFee";
 
 export type PaymentAdapterResult = {
   status: "exported" | "submitted" | "failed" | "queued";
@@ -231,6 +232,9 @@ export async function createPaymentIntent(input: {
       throw new Error("Arc USDC rail requires an active vendor arc_usdc endpoint");
     }
     const settlement = arcSettlement!;
+    const { assertArcPaymentsAllowed } = await import("@/domain/arc/config");
+    assertArcPaymentsAllowed(mode);
+
     await ensureAgentWallet({
       organizationId: input.organizationId,
       actorType: input.actorType,
@@ -303,6 +307,8 @@ export async function createPaymentIntent(input: {
   }
 
   const nextResidual = Math.max(0, residual - ledgerPay);
+  const fee =
+    rail === "arc_usdc" && arcSettlement ? describePlatformFee(arcSettlement.amount) : null;
   const intent = await prisma.paymentIntent.create({
     data: {
       organizationId: input.organizationId,
@@ -318,6 +324,7 @@ export async function createPaymentIntent(input: {
         accountNumber: undefined,
       }),
       mode,
+      ...(fee && fee.feeAmount > 0 ? { feeAmount: fee.feeAmount, feeBps: fee.feeBps } : {}),
     },
   });
 

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="view_move_form_custara" model="ir.ui.view">
+    <field name="name">account.move.form.custara</field>
+    <field name="model">account.move</field>
+    <field name="inherit_id" ref="account.view_move_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//header" position="inside">
+        <button
+          name="action_send_to_custara"
+          type="object"
+          string="Send to Custara"
+          class="btn-secondary"
+          invisible="move_type not in ('in_invoice', 'in_refund')"
+        />
+      </xpath>
+      <xpath expr="//sheet" position="inside">
+        <group>
+          <field name="custara_sent_at" readonly="1"/>
+        </group>
+      </xpath>
+    </field>
+  </record>
+</odoo>

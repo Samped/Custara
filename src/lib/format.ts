@@ -39,6 +39,8 @@ export function connectorTypeLabel(type: string) {
       return "SFTP drop";
     case "accounting_xero":
       return "Xero";
+    case "accounting_odoo":
+      return "Odoo";
     case "accounting_qbo":
       return "QuickBooks";
     case "accounting_sage":

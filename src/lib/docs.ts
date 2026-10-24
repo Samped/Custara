@@ -37,6 +37,7 @@ export const DOC_PAGES: DocPage[] = [
   { slug: "settings", file: "settings.md", title: "Settings", section: "Admin" },
   { slug: "agent-payments", file: "agent-payments.md", title: "Agent payments", section: "Reference" },
   { slug: "erp-adapters", file: "erp-adapters.md", title: "ERP adapters", section: "Reference" },
+  { slug: "odoo-app", file: "odoo-app.md", title: "Odoo app", section: "Reference" },
   { slug: "qa-runbook", file: "qa-runbook.md", title: "Release verification", section: "Reference" },
   { slug: "soc2-roadmap", file: "soc2-roadmap.md", title: "SOC 2 readiness", section: "Reference" },
 ];

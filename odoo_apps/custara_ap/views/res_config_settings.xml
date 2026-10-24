@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="res_config_settings_view_form_custara" model="ir.ui.view">
+    <field name="name">res.config.settings.view.form.inherit.custara</field>
+    <field name="model">res.config.settings</field>
+    <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//app[@name='account']" position="inside">
+        <block title="Custara AP" name="custara_ap_settings">
+          <setting string="Custara API">
+            <field name="custara_api_url"/>
+            <field name="custara_api_key" password="True"/>
+            <div class="text-muted">
+              Custara approves and pays. Odoo stays the ledger. Settlement is Arc testnet USDC.
+            </div>
+          </setting>
+        </block>
+      </xpath>
+    </field>
+  </record>
+</odoo>

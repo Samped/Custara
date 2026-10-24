@@ -50,7 +50,13 @@ export default async function ConnectorsPage({
     journalId?: number | null;
     companies?: Array<{ id: number; name: string }>;
     truncated?: boolean;
-    lastSyncSummary?: { vendors?: number; ingested?: number; truncated?: boolean };
+    lastSyncSummary?: {
+      vendors?: number;
+      ingested?: number;
+      customerInvoices?: number;
+      truncated?: boolean;
+    };
+    webhookToken?: string | null;
   };
   const odooFailures = await listOdooWritebackFailures(user.organizationId);
   const odooSecrets = JSON.parse(odoo.secretsJson || "{}") as { apiKeyEnc?: string };
@@ -225,6 +231,18 @@ export default async function ConnectorsPage({
               ? ` · ${odooConfig.lastSyncSummary.ingested || 0} bills / ${odooConfig.lastSyncSummary.vendors || 0} vendors`
               : ""}
           </p>
+          <p className="mt-2 text-[0.72rem] text-muted">
+            Posted vendor bills appear in Inbox within a minute. You do not need to click Sync.
+          </p>
+          {(odooConfig.lastSyncSummary?.ingested || 0) === 0 &&
+          (odooConfig.lastSyncSummary?.customerInvoices || 0) > 0 ? (
+            <p className="mt-2 text-[0.72rem] text-warn">
+              Odoo has {odooConfig.lastSyncSummary?.customerInvoices} customer invoice
+              {(odooConfig.lastSyncSummary?.customerInvoices || 0) === 1 ? "" : "s"} (INV/…). Those are
+              money owed to you. Create a vendor bill under Accounting → Vendors → Bills to pay a
+              supplier.
+            </p>
+          ) : null}
           {odooConfig.truncated ? (
             <p className="mt-2 text-[0.72rem] text-warn">
               Last sync hit the record cap. Older Odoo rows were skipped — use Sync now after the first

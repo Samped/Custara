@@ -20,6 +20,7 @@ import {
 import { enqueueJob } from "@/lib/jobs";
 import { runInvoicePipeline } from "@/domain/pipeline";
 import { upsertVendorPurchaseOrder } from "@/domain/contracts";
+import { getArcChain } from "@/domain/arc/config";
 
 export const ODOO_CONNECTOR_TYPE = "accounting_odoo";
 
@@ -1927,7 +1928,7 @@ export async function writeOdooPaymentBack(input: {
 
     try {
       await kw("account.move", "message_post", [[moveIdRaw]], {
-        body: `Paid ${ledger.amount} ${ledger.currency} in Custara (${intent?.amount ?? input.amount} ${intent?.currency || input.currency} Arc testnet). ${intent?.txHash || ""} ${intentKey}`.trim(),
+        body: `Paid ${ledger.amount} ${ledger.currency} in Custara (${intent?.amount ?? input.amount} ${intent?.currency || input.currency} ${getArcChain() === "ARC" ? "Arc mainnet" : "Arc testnet"}). ${intent?.txHash || ""} ${intentKey}`.trim(),
       });
     } catch {
       /* chatter optional */
@@ -2030,7 +2031,7 @@ export async function writeOdooApprovalBack(input: {
       await kw("account.move", "message_post", [
         [moveId],
       ], {
-        body: `Approved in Custara${input.actorEmail ? ` by ${input.actorEmail}` : ""}. Settlement stays Arc testnet USDC.`,
+        body: `Approved in Custara${input.actorEmail ? ` by ${input.actorEmail}` : ""}. Settlement stays ${getArcChain() === "ARC" ? "Arc mainnet" : "Arc testnet"} USDC.`,
       });
     } catch {
       /* chatter optional */

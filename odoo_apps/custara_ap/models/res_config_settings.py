@@ -15,6 +15,6 @@ class ResConfigSettings(models.TransientModel):
     )
     custara_settlement_note = fields.Char(
         string="Settlement rail",
-        default="Arc testnet USDC — not mainnet",
+        default="Arc USDC via Custara (mainnet on custara.xyz; testnet on testnet.custara.xyz)",
         readonly=True,
     )

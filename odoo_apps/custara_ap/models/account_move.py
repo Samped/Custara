@@ -77,3 +77,16 @@ class AccountMove(models.Model):
                 body=_("Sent to Custara. Settlement, if paid, is Arc testnet USDC — not mainnet.")
             )
         return True
+
+    def _post(self, soft=True):
+        moves = super()._post(soft=soft)
+        icp = self.env["ir.config_parameter"].sudo()
+        if not ((icp.get_param("custara.api_url") or "").strip() and (icp.get_param("custara.api_key") or "").strip()):
+            return moves
+        bills = moves.filtered(lambda m: m.move_type in ("in_invoice", "in_refund") and not m.custara_sent_at)
+        if bills:
+            try:
+                bills.action_send_to_custara()
+            except Exception as err:
+                _logger.warning("Custara auto-push skipped: %s", err)
+        return moves

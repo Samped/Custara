@@ -9,6 +9,7 @@ import { fxSourceLabel, quoteArcSettlement, refreshLiveFxBook } from "@/domain/f
 import { InvoiceActionForm } from "@/components/app/InvoiceActionForm";
 import { MfaSetupRequired } from "@/components/app/MfaSetupRequired";
 import { invoiceOpenAmount, listOpenVendorCredits } from "@/domain/apLedger";
+import { dropStaleContractRequired, loadPolicyRules } from "@/domain/policy";
 
 export default async function InvoiceWorkbenchPage({
   params,
@@ -101,7 +102,16 @@ export default async function InvoiceWorkbenchPage({
         },
       })
     : null;
-  const hardRisks = invoice.risks.filter((r) => {
+  const policyRules = await loadPolicyRules(user.organizationId);
+  if (!policyRules.requirePurchaseOrder) {
+    await dropStaleContractRequired(user.organizationId, policyRules);
+  }
+  const visibleRisks = invoice.risks.filter((r) => {
+    if (r.code !== "contract_required") return true;
+    if (!policyRules.requirePurchaseOrder) return false;
+    return !["approved", "payment_queued", "payment_sent"].includes(invoice.status);
+  });
+  const hardRisks = visibleRisks.filter((r) => {
     if (r.severity !== "hard") return false;
     // Allowlist live — don't keep blocking Initiate on a stale destination hold.
     if (r.code === "destination_not_allowlisted" && allowlisted) return false;
@@ -342,11 +352,11 @@ export default async function InvoiceWorkbenchPage({
                 </span>
               </p>
             ) : null}
-            {invoice.risks.length === 0 ? (
+            {visibleRisks.length === 0 ? (
               <p className="mt-3 text-sm text-muted">No risks flagged.</p>
             ) : (
               <ul className="mt-3 space-y-2">
-                {invoice.risks.map((risk) => {
+                {visibleRisks.map((risk) => {
                   const clearedDest =
                     risk.code === "destination_not_allowlisted" && allowlisted;
                   return (

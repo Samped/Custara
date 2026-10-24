@@ -107,6 +107,8 @@ export default async function ControlsPage({
       createdBy: session.id,
     });
     revalidatePath("/app/policies");
+    revalidatePath("/app/invoices");
+    revalidatePath("/app");
   }
 
   async function publishStrict() {

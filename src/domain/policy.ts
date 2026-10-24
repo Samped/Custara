@@ -97,7 +97,7 @@ export async function publishPolicyVersion(input: {
   });
   const version = (latest?.version || 0) + 1;
 
-  return prisma.approvalPolicyVersion.create({
+  const published = await prisma.approvalPolicyVersion.create({
     data: {
       policyId: policy.id,
       version,
@@ -106,6 +106,21 @@ export async function publishPolicyVersion(input: {
       createdBy: input.createdBy,
     },
   });
+  await dropStaleContractRequired(input.organizationId, input.rules);
+  return published;
+}
+
+/** When a PO is no longer required, remove leftover contract_required rows so pay is not blocked. */
+export async function dropStaleContractRequired(organizationId: string, rules?: PolicyRules) {
+  const active = rules || (await loadPolicyRules(organizationId));
+  if (active.requirePurchaseOrder) return 0;
+  const result = await prisma.riskAssessment.deleteMany({
+    where: {
+      code: "contract_required",
+      invoice: { organizationId },
+    },
+  });
+  return result.count;
 }
 
 function autoApproveCeiling(rules: PolicyRules, currency: string) {

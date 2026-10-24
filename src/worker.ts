@@ -9,7 +9,7 @@ import {
   syncAccountingProvider,
   type AccountingProvider,
 } from "@/domain/connectors/accountingProviders";
-import { retryFailedOdooWritebacks, syncAllOdooConnectors } from "@/domain/connectors/odoo";
+import { retryFailedOdooWritebacks, syncAllOdooConnectors, syncOdooInbound } from "@/domain/connectors/odoo";
 import {
   processAllSftpDrops,
   processLocalSftpDrop,
@@ -79,6 +79,13 @@ async function main() {
     if (name === "sync_odoo_all") {
       const summary = await syncAllOdooConnectors();
       console.log("[odoo-sync]", JSON.stringify(summary));
+      return;
+    }
+    if (name === "sync_odoo_org") {
+      await syncOdooInbound({
+        organizationId: String(payload.organizationId),
+        skipIfBusy: true,
+      });
       return;
     }
     if (name === "retry_odoo_writebacks") {
@@ -220,7 +227,7 @@ async function main() {
   await ensureRepeatableJob({
     queue: "accounting-sync",
     name: "sync_odoo_all",
-    everyMs: 15 * 60_000,
+    everyMs: 60_000,
     jobId: "cron-odoo-sync",
   });
   await ensureRepeatableJob({

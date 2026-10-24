@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
         journalId: body.journalId ? Number(body.journalId) : undefined,
       });
       try {
-        await syncOdooInbound({ organizationId: user.organizationId, actorId: user.id });
+        await syncOdooInbound({ organizationId: user.organizationId, actorId: user.id, full: true });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Odoo connected, first sync failed";
         return NextResponse.json({
@@ -219,6 +219,7 @@ export async function POST(request: NextRequest) {
       const summary = await syncOdooInbound({
         organizationId: user.organizationId,
         actorId: user.id,
+        full: true,
       });
       return NextResponse.json({
         ok: true,

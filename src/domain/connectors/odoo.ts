@@ -2,6 +2,7 @@
  * First-class Odoo connector: JSON-RPC session, vendor/PO/bill sync, payment write-back.
  * Odoo remains the ledger; Custara is controls and settlement.
  */
+import { randomBytes } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { prisma } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
@@ -28,7 +29,7 @@ const HARD_CAP = 5000;
 const MAX_VENDORS = HARD_CAP;
 const MAX_POS = HARD_CAP;
 const MAX_BILLS = HARD_CAP;
-const SYNC_LOCK_MS = 8 * 60_000;
+const SYNC_LOCK_MS = 2 * 60_000;
 const SKIP_LINE_DISPLAY = new Set([
   "line_section",
   "line_note",
@@ -64,6 +65,7 @@ type OdooConfig = {
   truncated?: boolean;
   lastSyncSummary?: Record<string, unknown> | null;
   companies?: Array<{ id: number; name: string }>;
+  webhookToken?: string | null;
 };
 
 type RpcFetcher = typeof fetch;
@@ -534,6 +536,7 @@ export async function connectOdoo(input: {
             input.companyId ||
             prevConfig.companyId ||
             (companies.length === 1 ? companies[0].id : null);
+          const webhookToken = prevConfig.webhookToken || randomBytes(24).toString("hex");
           const connector = await prisma.integrationConnector.update({
             where: { id: existing.id },
             data: {
@@ -548,6 +551,7 @@ export async function connectOdoo(input: {
                 companies,
                 lastError: null,
                 syncDirection: "two_way",
+                webhookToken,
               } satisfies OdooConfig),
               secretsJson: packSecrets({
                 database,
@@ -771,18 +775,21 @@ export async function syncOdooInbound(input: {
   actorId?: string;
   fetchImpl?: RpcFetcher;
   skipIfBusy?: boolean;
+  /** Ignore write_date window — used on connect and Sync now. */
+  full?: boolean;
 }): Promise<{
   vendors: number;
   purchaseOrders: number;
   ingested: number;
   skipped: number;
+  customerInvoices?: number;
   truncated?: boolean;
 }> {
   const sess = await session(input.organizationId, input.fetchImpl);
   const config = parseConfig(sess.connector.configJson);
   if (lockHeld(config)) {
     if (input.skipIfBusy) {
-      return { vendors: 0, purchaseOrders: 0, ingested: 0, skipped: 0, truncated: false };
+      return { vendors: 0, purchaseOrders: 0, ingested: 0, skipped: 0, customerInvoices: 0, truncated: false };
     }
     throw new Error("Odoo sync is already running.");
   }
@@ -807,7 +814,8 @@ export async function syncOdooInbound(input: {
   let ingested = 0;
   let skipped = 0;
   let truncated = false;
-  const lastSyncAt = sess.connector.lastSyncAt;
+  let customerInvoices = 0;
+  const lastSyncAt = input.full ? null : sess.connector.lastSyncAt;
   let fiscalLock: Date | null = null;
 
   try {
@@ -1045,6 +1053,20 @@ export async function syncOdooInbound(input: {
       if (!isOptionalOdooModelError(err)) throw err;
     }
 
+    try {
+      customerInvoices =
+        Number(
+          await kw("account.move", "search_count", [
+            [
+              ["move_type", "=", "out_invoice"],
+              ["state", "in", ["draft", "posted"]],
+            ],
+          ]),
+        ) || 0;
+    } catch {
+      customerInvoices = 0;
+    }
+
     const billQuery = withWriteDateSince(
       [
         ["move_type", "in", ["in_invoice", "in_refund"]],
@@ -1232,7 +1254,8 @@ export async function syncOdooInbound(input: {
           lastError: truncated ? "Sync hit the record cap. Some older Odoo rows were not pulled." : null,
           syncStartedAt: null,
           truncated,
-          lastSyncSummary: { vendors, purchaseOrders, ingested, skipped, truncated },
+          webhookToken: parseConfig(sess.connector.configJson).webhookToken || randomBytes(24).toString("hex"),
+          lastSyncSummary: { vendors, purchaseOrders, ingested, skipped, customerInvoices, truncated },
         }),
       },
     });
@@ -1244,10 +1267,10 @@ export async function syncOdooInbound(input: {
       action: "connector.odoo_synced",
       entityType: "connector",
       entityId: sess.connector.id,
-      metadata: { vendors, purchaseOrders, ingested, skipped, truncated },
+      metadata: { vendors, purchaseOrders, ingested, skipped, customerInvoices, truncated },
     });
 
-    return { vendors, purchaseOrders, ingested, skipped, truncated };
+    return { vendors, purchaseOrders, ingested, skipped, customerInvoices, truncated };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Odoo sync failed";
     await prisma.integrationConnector.update({
@@ -1286,6 +1309,25 @@ export async function syncAllOdooConnectors() {
     }
   }
   return results;
+}
+
+export async function enqueueOdooSyncByWebhookToken(token: string) {
+  const trimmed = token.trim();
+  if (!trimmed) return false;
+  const connectors = await prisma.integrationConnector.findMany({
+    where: { type: ODOO_CONNECTOR_TYPE, status: { in: ["connected", "error"] } },
+    select: { organizationId: true, configJson: true },
+  });
+  const match = connectors.find((c) => parseConfig(c.configJson).webhookToken === trimmed);
+  if (!match) return false;
+  await enqueueJob({
+    queue: "accounting-sync",
+    name: "sync_odoo_org",
+    payload: { organizationId: match.organizationId },
+    organizationId: match.organizationId,
+    maxAttempts: 2,
+  });
+  return true;
 }
 
 async function nameOdooAnalytics(

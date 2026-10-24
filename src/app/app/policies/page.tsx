@@ -95,6 +95,8 @@ export default async function ControlsPage({
       holdOnUnknownDestination: formData.get("holdOnUnknownDestination") === "on",
       blockAutoApproveUntilAllowlisted: formData.get("blockAutoApproveUntilAllowlisted") === "on",
       minConfidenceForAutoApprove: Number(formData.get("minConfidenceForAutoApprove") || 0.6),
+      requireAnalyticApproval: formData.get("requireAnalyticApproval") === "on",
+      analyticApprovalNames: String(formData.get("analyticApprovalNames") || "").trim(),
     };
     await publishPolicyVersion({
       organizationId: session.organizationId,
@@ -256,6 +258,23 @@ export default async function ControlsPage({
               defaultChecked={active?.rules.blockAutoApproveUntilAllowlisted ?? true}
             />
             Block auto-approve until Arc destination allowlisted
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              name="requireAnalyticApproval"
+              type="checkbox"
+              defaultChecked={active?.rules.requireAnalyticApproval ?? false}
+            />
+            Require approval when a bill is coded to a cost center
+          </label>
+          <label className="text-sm md:col-span-2">
+            Cost centers that require approval (comma-separated; empty = any)
+            <input
+              name="analyticApprovalNames"
+              className="input mt-1"
+              defaultValue={active?.rules.analyticApprovalNames || ""}
+              placeholder="Marketing, R&D"
+            />
           </label>
           <div className="flex flex-wrap gap-2 md:col-span-2">
             <button type="submit" className="btn btn-primary">

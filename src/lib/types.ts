@@ -15,6 +15,12 @@ export const extractionSchema = z.object({
   bankName: z.string().optional().nullable(),
   bankCode: z.string().optional().nullable(),
   arcAddress: z.string().optional().nullable(),
+  paymentMethod: z.string().optional().nullable(),
+  odooMoveType: z.string().optional().nullable(),
+  odooState: z.string().optional().nullable(),
+  odooPaymentState: z.string().optional().nullable(),
+  odooResidual: z.number().optional().nullable(),
+  paymentTerm: z.string().optional().nullable(),
   lineItems: z
     .array(
       z.object({
@@ -22,6 +28,9 @@ export const extractionSchema = z.object({
         quantity: z.number().optional(),
         unitPrice: z.number().optional(),
         amount: z.number(),
+        accountCode: z.string().optional().nullable(),
+        analytic: z.string().optional().nullable(),
+        product: z.string().optional().nullable(),
       }),
     )
     .default([]),
@@ -68,6 +77,10 @@ export type PolicyRules = {
   blockAutoApproveUntilAllowlisted?: boolean;
   /** Minimum extraction confidence for auto-approve (default 0.6) */
   minConfidenceForAutoApprove?: number;
+  /** Hold bills coded to an analytic / cost center for a person. */
+  requireAnalyticApproval?: boolean;
+  /** Optional comma-separated analytic names. Empty = any cost center. */
+  analyticApprovalNames?: string;
 };
 
 export const PAYABLESAI_STRICT_RULES: PolicyRules = {

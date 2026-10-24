@@ -50,6 +50,8 @@ export async function loadPolicyRules(organizationId: string): Promise<PolicyRul
     holdOnUnknownDestination: true,
     blockAutoApproveUntilAllowlisted: true,
     minConfidenceForAutoApprove: 0.6,
+    requireAnalyticApproval: false,
+    analyticApprovalNames: "",
   };
 }
 
@@ -140,6 +142,7 @@ export function evaluatePolicy(input: {
   const hasContractRequired = hard.some((r) => r.code === "contract_required");
   const hasAddressScreenFail = hard.some((r) => r.code === "address_screen_failed");
   const hasLowConfidence = hard.some((r) => r.code === "low_confidence");
+  const hasAnalyticApproval = input.risks.some((r) => r.code === "analytic_approval");
 
   if (hasDuplicate && input.rules.holdOnDuplicate) {
     return {
@@ -174,6 +177,14 @@ export function evaluatePolicy(input: {
       decision: "hold",
       requiredApprovals: 1,
       reason: "Arc destination present but not allowlisted — no auto-approve until allowlisted.",
+      nextStatus: "needs_review",
+    };
+  }
+  if (input.rules.requireAnalyticApproval && hasAnalyticApproval) {
+    return {
+      decision: "hold",
+      requiredApprovals: 1,
+      reason: "Cost-center coding requires review.",
       nextStatus: "needs_review",
     };
   }

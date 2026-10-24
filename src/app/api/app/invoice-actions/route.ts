@@ -3,6 +3,7 @@ import { AuthError, canApprove, canPay, requireSessionUser } from "@/lib/auth";
 import { decideApproval } from "@/domain/pipeline";
 import { createPaymentIntent } from "@/domain/payment";
 import { reconcileSettlement } from "@/domain/cash";
+import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       const idempotencyKey =
         String(body.idempotencyKey || "") || `pay_${invoiceId}_${Date.now()}`;
       const mfaCode = body.mfaCode ? String(body.mfaCode) : null;
+      const amountRaw = body.amount != null ? Number(body.amount) : null;
       const intent = await createPaymentIntent({
         organizationId: user.organizationId,
         invoiceId,
@@ -68,6 +70,7 @@ export async function POST(request: NextRequest) {
         actorType: "user",
         actorId: user.id,
         mfaCode,
+        amount: amountRaw && amountRaw > 0 ? amountRaw : null,
       });
       return NextResponse.json({ ok: true, redirectTo: `/app/payments?intent=${intent.id}` });
     }
@@ -103,6 +106,120 @@ export async function POST(request: NextRequest) {
         redirectTo: `/app/payments?intent=${result.intent.id}`,
         taskId: result.task?.id ?? null,
       });
+    }
+
+    if (action === "apply_credit") {
+      const user = await requireSessionUser(["admin", "approver", "payer"], "payments:write");
+      const { applyVendorCredit } = await import("@/domain/apLedger");
+      await applyVendorCredit({
+        organizationId: user.organizationId,
+        invoiceId: String(body.invoiceId || ""),
+        creditInvoiceId: String(body.creditInvoiceId || ""),
+        actorId: user.id,
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/invoices/${body.invoiceId}` });
+    }
+
+    if (action === "waive_credit") {
+      const user = await requireSessionUser(["admin", "approver", "payer"], "payments:write");
+      const { waiveVendorCredits } = await import("@/domain/apLedger");
+      await waiveVendorCredits({
+        organizationId: user.organizationId,
+        invoiceId: String(body.invoiceId || ""),
+        actorId: user.id,
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/invoices/${body.invoiceId}` });
+    }
+
+    if (action === "add_comment") {
+      const user = await requireSessionUser(undefined, "invoice:read");
+      const { addInvoiceComment } = await import("@/domain/apWork");
+      await addInvoiceComment({
+        organizationId: user.organizationId,
+        invoiceId: String(body.invoiceId || ""),
+        authorId: user.id,
+        body: String(body.body || ""),
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/invoices/${body.invoiceId}` });
+    }
+
+    if (action === "add_activity") {
+      const user = await requireSessionUser(["admin", "approver", "payer"], "approvals:write");
+      const { addInvoiceActivity } = await import("@/domain/apWork");
+      await addInvoiceActivity({
+        organizationId: user.organizationId,
+        invoiceId: String(body.invoiceId || ""),
+        title: String(body.title || ""),
+        dueAt: body.dueAt ? new Date(String(body.dueAt)) : null,
+        actorId: user.id,
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/invoices/${body.invoiceId}` });
+    }
+
+    if (action === "complete_activity") {
+      const user = await requireSessionUser(["admin", "approver", "payer"], "approvals:write");
+      const { completeInvoiceActivity } = await import("@/domain/apWork");
+      await completeInvoiceActivity({
+        organizationId: user.organizationId,
+        activityId: String(body.activityId || ""),
+        actorId: user.id,
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/invoices/${body.invoiceId}` });
+    }
+
+    if (action === "set_hold") {
+      const user = await requireSessionUser(["admin", "approver"], "approvals:write");
+      const { setInvoiceHoldReason } = await import("@/domain/apWork");
+      await setInvoiceHoldReason({
+        organizationId: user.organizationId,
+        invoiceId: String(body.invoiceId || ""),
+        holdReason: String(body.holdReason || ""),
+        actorId: user.id,
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/invoices/${body.invoiceId}` });
+    }
+
+    if (action === "set_recurring") {
+      const user = await requireSessionUser(["admin", "payer"], "payments:write");
+      const invoiceId = String(body.invoiceId || "");
+      const interval = String(body.recurringInterval || "") || null;
+      await prisma.invoice.updateMany({
+        where: { id: invoiceId, organizationId: user.organizationId },
+        data: { recurringInterval: interval === "monthly" || interval === "weekly" ? interval : null },
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/invoices/${invoiceId}` });
+    }
+
+    if (action === "spawn_recurring") {
+      const user = await requireSessionUser(["admin", "payer"], "payments:write");
+      const { spawnRecurringInvoice } = await import("@/domain/apWork");
+      const next = await spawnRecurringInvoice({
+        organizationId: user.organizationId,
+        invoiceId: String(body.invoiceId || ""),
+        actorId: user.id,
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/invoices/${next.id}` });
+    }
+
+    if (action === "create_pay_run") {
+      const user = await requireSessionUser(["admin", "payer"], "payments:write");
+      const { createPayRun, executePayRun } = await import("@/domain/payRun");
+      const ids = String(body.invoiceIds || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
+      const run = await createPayRun({
+        organizationId: user.organizationId,
+        actorId: user.id,
+        items: ids.map((invoiceId) => ({ invoiceId })),
+      });
+      await executePayRun({
+        organizationId: user.organizationId,
+        payRunId: run.id,
+        actorId: user.id,
+        mfaCode: body.mfaCode ? String(body.mfaCode) : null,
+      });
+      return NextResponse.json({ ok: true, redirectTo: `/app/payments?tab=run&run=${run.id}` });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

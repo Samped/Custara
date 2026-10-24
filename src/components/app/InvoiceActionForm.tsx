@@ -44,6 +44,10 @@ function readFormFields(form: HTMLFormElement): Record<string, string> {
         continue;
       }
       if (el instanceof HTMLInputElement && el.type === "file") continue;
+      if (el instanceof HTMLInputElement && el.type === "checkbox" && out[el.name]) {
+        out[el.name] = `${out[el.name]},${el.value}`;
+        continue;
+      }
       out[el.name] = el.value;
     }
   }

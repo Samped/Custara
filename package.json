@@ -2,6 +2,7 @@
   "name": "custara",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "engines": {
     "node": "22.x"
   },
@@ -18,9 +19,7 @@
     "worker": "tsx src/worker.ts",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "E2E=1 tsx --test tests/e2e/**/*.test.ts",
-    "test:e2e:ui": "playwright test",
-    "fund:agent": "tsx scripts/fund-agent-testnet.ts",
-    "dev:all": "echo 'Run: npm run db:up (terminal 1), redis + npm run worker (terminal 2), npm run dev (terminal 3)'"
+    "test:e2e:ui": "playwright test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1145.0",

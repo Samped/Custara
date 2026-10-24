@@ -11,7 +11,7 @@
 
 Queues: `invoice-pipeline`, `agent-tasks`, `webhooks`, `xero-sync`, `accounting-sync`, `mailbox-poll`, `sftp-poll`, `payment-schedule`, `collections-dunning`, `retention-purge`.
 
-Scheduled work includes autopay, collections reminders, mailbox and SFTP polls, and retention deletion of expired documents.
+Scheduled work includes autopay, collections reminders, mailbox and SFTP polls, Odoo bill/vendor sync, and retention deletion of expired documents.
 
 If Redis is unreachable, jobs are stored in Postgres as pending and a warning is logged. Arc pay from the API still attempts the transfer inside the request. Webhook delivery, autopay, and polls wait for Redis and the worker.
 
@@ -76,7 +76,7 @@ Copy the **external** Postgres URL and the Key Value URL for Vercel. The worker 
 
 ### Vercel
 
-Import the GitHub repository. Framework is Next.js. Node.js is 20. Set the same `DATABASE_URL` (external), `REDIS_URL` (`rediss://`), `SESSION_SECRET`, `ENCRYPTION_KEY`, `OPENAI_API_KEY`, Circle keys, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and the R2 variables. `OPENAI_API_KEY` is required for invoice extraction on both Vercel and the worker.
+Import the GitHub repository. Framework is Next.js. Node.js is 22. Set the same `DATABASE_URL` (external), `REDIS_URL` (`rediss://`), `SESSION_SECRET`, `ENCRYPTION_KEY`, `OPENAI_API_KEY`, Circle keys, `ARC_PAYMENTS_LIVE=true`, `ARC_ALLOW_SIMULATED=false`, `ARC_CHAIN`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and the R2 variables. `OPENAI_API_KEY` is required for invoice extraction on both Vercel and the worker.
 
 Set `ALLOW_JIT_ORG_CREATION=true` only until the first workspace exists, then remove it and redeploy. Production does not create a workspace for an unknown email when that variable is unset.
 
@@ -126,4 +126,4 @@ Add `custara.xyz` and `www.custara.xyz` in the Vercel project and wait for the c
 
 ## License
 
-No open-source license is published. Contact the maintainers before redistributing the repository or the CLI package.
+Custara is MIT licensed. See [LICENSE](../LICENSE).

@@ -18,7 +18,7 @@ ingest → extract → risk → policy → (approve) → pay timing → payment 
 
 | Area | Details |
 |------|---------|
-| Ingest | Upload, CSV, org ingest email, mailbox webhook, SFTP drop, FIRS e-invoice, ERP adapters, vendor portal |
+| Ingest | Upload, CSV, org ingest email, mailbox webhook, SFTP drop, FIRS e-invoice, Odoo connector, ERP adapters, vendor portal |
 | Controls | Versioned policies, maker-checker approvals, MFA above a USD threshold, destination allowlist, spend caps |
 | Money | Arc USDC via Circle agent wallet; Nigeria rail is export/sandbox unless partner live is enabled |
 | Audit | Hash-chained events, request IDs, SIEM export |
@@ -40,7 +40,7 @@ Auto-pay for approved vendors is **on** by default. Live payment mode applies st
 
 ## Requirements
 
-- Node 20+
+- Node 22
 - Postgres 16 (embedded helper or Docker)
 - Redis 7 (required for the worker)
 
@@ -76,6 +76,7 @@ npm run db:seed
 > **Warning:** `npm run db:seed` and `npm run db:reset` **delete all organizations and users**, then recreate only the Lagos demo workspace. Your own startup (e.g. LOOP) and its data will be wiped. Do **not** seed when you want to keep a workspace you registered via OTP. Prefer `npx prisma db push` alone after schema changes.
 
 Your email is tied to one startup membership (`WorkspaceUser.email` is globally unique). Log out and back in resumes the same company — unless the database was wiped as above.
+
 **Terminal 2 — Redis + worker** (skip Redis if Compose already started it)
 
 ```bash
@@ -233,4 +234,4 @@ Tracked in [docs/soc2-roadmap.md](docs/soc2-roadmap.md).
 
 ## License
 
-Proprietary for now — no open-source license is published in this repository. Contact the maintainers before redistributing.
+MIT. See [LICENSE](LICENSE).

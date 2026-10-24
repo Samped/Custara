@@ -3,6 +3,7 @@ import { dropStaleContractRequired, loadPolicyRules } from "@/domain/policy";
 import { assertSpendLimits } from "@/domain/arc/allowlist";
 import { getPayingAgentWallet } from "@/domain/arc/wallets";
 import { screenDestination, screenPayAddress } from "@/domain/screening";
+import { describePlatformFee } from "@/domain/platformFee";
 
 /** Hard risks that still stop pay after approval and the live policy. */
 export function payBlockingHardRisks(
@@ -87,13 +88,16 @@ export async function assertPayTimeGuards(input: {
       address: addr,
       context: "pre_pay",
     });
-    await assertSpendLimits(input.organizationId, input.amount);
+    const { feeAmount, totalDebit } = describePlatformFee(input.amount);
+    await assertSpendLimits(input.organizationId, totalDebit);
 
     const agent = await getPayingAgentWallet(input.organizationId);
     if (!agent) throw new Error("Pay blocked: agent wallet not provisioned");
-    if (agent.balanceUsdc != null && agent.balanceUsdc < input.amount) {
+    if (agent.balanceUsdc != null && agent.balanceUsdc < totalDebit) {
       throw new Error(
-        `Pay blocked: agent wallet balance ${agent.balanceUsdc} USDC < ${input.amount}`,
+        feeAmount > 0
+          ? `Pay blocked: agent wallet balance ${agent.balanceUsdc} USDC < ${totalDebit} (vendor ${input.amount} + Custara fee ${feeAmount})`
+          : `Pay blocked: agent wallet balance ${agent.balanceUsdc} USDC < ${input.amount}`,
       );
     }
   }

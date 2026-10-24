@@ -196,6 +196,20 @@ export async function decideApproval(input: {
       organizationId: input.organizationId,
       invoiceId: approval.invoiceId,
     });
+    const { writeOdooApprovalBack } = await import("@/domain/connectors/odoo");
+    const actor = await prisma.workspaceUser.findUnique({
+      where: { id: input.userId },
+      select: { email: true },
+    });
+    await writeOdooApprovalBack({
+      organizationId: input.organizationId,
+      invoiceId: approval.invoiceId,
+      actorEmail: actor?.email,
+    });
+    await prisma.invoiceActivity.updateMany({
+      where: { invoiceId: approval.invoiceId, status: "open" },
+      data: { status: "done", completedAt: new Date() },
+    });
   } else {
     await prisma.invoice.update({
       where: { id: approval.invoiceId },

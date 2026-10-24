@@ -210,6 +210,17 @@ async function executeArcTransferTask(taskId: string) {
       data: { status: terminal ? "payment_sent" : "payment_queued" },
     });
 
+    if (terminal) {
+      const { writeOdooPaymentBack } = await import("@/domain/connectors/odoo");
+      await writeOdooPaymentBack({
+        organizationId: task.organizationId,
+        invoiceId: intent.invoiceId,
+        paymentIntentId: intent.id,
+        amount: intent.amount,
+        currency: intent.currency,
+      });
+    }
+
     await applyAgentSpend({
       organizationId: task.organizationId,
       paymentIntentId: intent.id,

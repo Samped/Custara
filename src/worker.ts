@@ -9,6 +9,7 @@ import {
   syncAccountingProvider,
   type AccountingProvider,
 } from "@/domain/connectors/accountingProviders";
+import { retryFailedOdooWritebacks, syncAllOdooConnectors } from "@/domain/connectors/odoo";
 import {
   processAllSftpDrops,
   processLocalSftpDrop,
@@ -75,6 +76,27 @@ async function main() {
   });
 
   const accountingWorker = createWorker("accounting-sync", async (name, payload) => {
+    if (name === "sync_odoo_all") {
+      const summary = await syncAllOdooConnectors();
+      console.log("[odoo-sync]", JSON.stringify(summary));
+      return;
+    }
+    if (name === "retry_odoo_writebacks") {
+      const summary = await retryFailedOdooWritebacks();
+      console.log("[odoo-writeback-retry]", JSON.stringify(summary));
+      return;
+    }
+    if (name === "odoo_writeback") {
+      const { writeOdooPaymentBack } = await import("@/domain/connectors/odoo");
+      await writeOdooPaymentBack({
+        organizationId: String(payload.organizationId),
+        invoiceId: String(payload.invoiceId),
+        paymentIntentId: String(payload.paymentIntentId),
+        amount: Number(payload.amount),
+        currency: String(payload.currency || "USDC"),
+      });
+      return;
+    }
     if (name !== "sync_provider") throw new Error(`Unknown job ${name}`);
     const provider = String(payload.provider) as AccountingProvider;
     const organizationId = String(payload.organizationId);
@@ -107,6 +129,12 @@ async function main() {
     if (name === "resume_arc") {
       const summary = await resumeStuckArcPayments();
       console.log("[arc-resume]", JSON.stringify(summary));
+      return;
+    }
+    if (name === "run_recurring") {
+      const { spawnDueRecurringInvoices } = await import("@/domain/apWork");
+      const created = await spawnDueRecurringInvoices();
+      console.log("[recurring-bills]", JSON.stringify({ created: created.length }));
       return;
     }
     if (name !== "run_autopay") throw new Error(`Unknown job ${name}`);
@@ -164,6 +192,12 @@ async function main() {
   });
   await ensureRepeatableJob({
     queue: "payment-schedule",
+    name: "run_recurring",
+    everyMs: 60 * 60_000,
+    jobId: "cron-recurring-bills",
+  });
+  await ensureRepeatableJob({
+    queue: "payment-schedule",
     name: "resume_arc",
     everyMs: 2 * 60_000,
     jobId: "cron-arc-resume",
@@ -182,6 +216,18 @@ async function main() {
     name: "purge_expired",
     everyMs: 6 * 60 * 60_000,
     jobId: "cron-retention-purge",
+  });
+  await ensureRepeatableJob({
+    queue: "accounting-sync",
+    name: "sync_odoo_all",
+    everyMs: 15 * 60_000,
+    jobId: "cron-odoo-sync",
+  });
+  await ensureRepeatableJob({
+    queue: "accounting-sync",
+    name: "retry_odoo_writebacks",
+    everyMs: 2 * 60_000,
+    jobId: "cron-odoo-writeback",
   });
 
   console.log("Custara worker ready (BullMQ repeatable crons registered)");

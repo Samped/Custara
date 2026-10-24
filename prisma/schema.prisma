@@ -60,6 +60,9 @@ model Organization {
   purchaseOrders      VendorPurchaseOrder[]
   customers           Customer[]
   receivables         Receivable[]
+  invoiceComments     InvoiceComment[]
+  invoiceActivities   InvoiceActivity[]
+  payRuns             PayRun[]
 }
 
 model WorkspaceUser {
@@ -129,6 +132,9 @@ model Vendor {
   riskTier       String   @default("standard")
   earlyPayDiscountPct Float?
   earlyPayDays   Int?
+  address        String?
+  paymentTerm    String?
+  notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -137,6 +143,7 @@ model Vendor {
   invoices     Invoice[]
   portalInvites VendorPortalInvite[]
   purchaseOrders VendorPurchaseOrder[]
+  supplierPrices VendorSupplierPrice[]
 
   @@index([organizationId, name])
   @@unique([organizationId, externalId])
@@ -171,6 +178,8 @@ model VendorPurchaseOrder {
   amount         Float?
   currency       String   @default("NGN")
   label          String?
+  orderedQty     Float?
+  receivedQty    Float?
   status         String   @default("open") // open | closed
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -180,6 +189,96 @@ model VendorPurchaseOrder {
 
   @@unique([organizationId, poNumber])
   @@index([vendorId, status])
+}
+
+model VendorSupplierPrice {
+  id             String   @id @default(cuid())
+  vendorId       String
+  product        String
+  maxUnitPrice   Float
+  currency       String   @default("NGN")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, product])
+  @@index([vendorId])
+}
+
+model InvoiceComment {
+  id             String   @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  authorId       String?
+  body           String
+  postedToOdoo   Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, createdAt])
+}
+
+model InvoiceActivity {
+  id             String    @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  title          String
+  kind           String    @default("todo")
+  status         String    @default("open")
+  dueAt          DateTime?
+  assigneeId     String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([invoiceId, status])
+}
+
+model InvoiceInstallment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  sequence  Int
+  dueDate   DateTime
+  amount    Float
+  label     String?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model PayRun {
+  id             String    @id @default(cuid())
+  organizationId String
+  status         String    @default("draft")
+  createdById    String?
+  approvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items        PayRunItem[]
+
+  @@index([organizationId, status])
+}
+
+model PayRunItem {
+  id        String @id @default(cuid())
+  payRunId  String
+  invoiceId String
+  amount    Float
+  currency  String @default("NGN")
+
+  payRun  PayRun  @relation(fields: [payRunId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([payRunId, invoiceId])
 }
 
 // Thin AR — customers who owe the org (receivables).
@@ -327,6 +426,13 @@ model Invoice {
   sourceSegmentIndex Int?
   recommendedPayDate DateTime?
   payTimingReason  String?
+  residualAmount   Float?
+  creditApplied    Float     @default(0)
+  creditWaivedAt   DateTime?
+  paymentTerm      String?
+  holdReason       String?
+  recurringInterval String?
+  fiscalPeriodLocked Boolean @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -338,6 +444,10 @@ model Invoice {
   approvalRequests ApprovalRequest[]
   paymentIntents   PaymentIntent[]
   settlements      Settlement[]
+  comments         InvoiceComment[]
+  activities       InvoiceActivity[]
+  installments     InvoiceInstallment[]
+  payRunItems      PayRunItem[]
 
   @@index([organizationId, status])
   @@index([organizationId, invoiceNumber])
@@ -586,7 +696,7 @@ model WebhookDelivery {
 model IntegrationConnector {
   id             String    @id @default(cuid())
   organizationId String
-  type           String // accounting_xero | accounting_csv | payment_nigeria | mailbox_imap | whatsapp_business | sftp_drop | einvoice_firs | banking_* | accounting_qbo | accounting_sage | accounting_zoho
+  type           String // accounting_xero | accounting_odoo | accounting_csv | payment_nigeria | mailbox_imap | whatsapp_business | sftp_drop | einvoice_firs | banking_* | accounting_qbo | accounting_sage | accounting_zoho
   name           String
   status         String    @default("disconnected") // disconnected | connected | error
   configJson     String    @default("{}")

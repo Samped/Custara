@@ -6,6 +6,8 @@ import { assertDestinationAllowed, assertSpendLimits } from "./allowlist";
 import { createUsdcTransfer, getCircleTransaction } from "./circle";
 import { applyAgentSpend, ensureAgentWallet, restoreAgentSpend, syncWalletBalances } from "./wallets";
 import { reconcileSettlement } from "@/domain/cash";
+import { platformFeeAddress } from "@/domain/platformFee";
+import type { PaymentIntent } from "@prisma/client";
 
 export async function enqueueAgentTask(input: {
   organizationId: string;
@@ -99,6 +101,128 @@ async function markInvoicePaymentFailed(invoiceId: string, reason: string) {
   });
 }
 
+/** Second USDC transfer to Custara treasury. Never claws back a successful vendor pay. */
+async function collectPlatformFee(
+  intent: PaymentIntent,
+  ctx: { mode: "sandbox" | "live"; agentWalletId: string; agentAddress: string; provider: string },
+) {
+  const feeAmount = intent.feeAmount || 0;
+  if (!(feeAmount > 0)) return { skipped: true as const };
+  if (intent.feeTxHash) return { already: true as const };
+  const destination = platformFeeAddress();
+  if (!destination) {
+    await writeAudit({
+      organizationId: intent.organizationId,
+      actorType: "system",
+      action: "payment.fee_skipped",
+      entityType: "payment_intent",
+      entityId: intent.id,
+      metadata: { reason: "no_PLATFORM_FEE_ADDRESS", feeAmount },
+    });
+    return { skipped: true as const, reason: "no_address" };
+  }
+
+  let transfer = intent.feeCircleTxId
+    ? await getCircleTransaction(intent.feeCircleTxId).then((tx) => ({
+        id: tx.id,
+        state: tx.state,
+        txHash: tx.txHash || intent.feeTxHash,
+        provider: ctx.provider,
+      }))
+    : await createUsdcTransfer({
+        mode: ctx.mode,
+        walletId: ctx.agentWalletId,
+        walletAddress: ctx.agentAddress,
+        provider: ctx.provider,
+        destinationAddress: destination,
+        amount: feeAmount,
+        idempotencyKey: `arc-fee-${intent.id}`,
+      });
+
+  const settled = (state: string) =>
+    ["COMPLETE", "COMPLETED", "CONFIRMED", "FAILED", "CANCELLED", "DENIED"].includes(state.toUpperCase());
+  for (let i = 0; i < 6 && !settled(transfer.state); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const tx = await getCircleTransaction(transfer.id);
+    transfer = { ...transfer, id: tx.id, state: tx.state, txHash: tx.txHash || transfer.txHash };
+  }
+
+  const failed = ["FAILED", "CANCELLED", "DENIED"].includes(transfer.state.toUpperCase());
+  await prisma.paymentIntent.update({
+    where: { id: intent.id },
+    data: {
+      feeCircleTxId: transfer.id,
+      feeTxHash: transfer.txHash || intent.feeTxHash,
+    },
+  });
+
+  if (failed) {
+    await writeAudit({
+      organizationId: intent.organizationId,
+      actorType: "system",
+      action: "payment.fee_failed",
+      entityType: "payment_intent",
+      entityId: intent.id,
+      metadata: { circleTxId: transfer.id, state: transfer.state, feeAmount },
+    });
+    return { failed: true as const, state: transfer.state };
+  }
+
+  if (["COMPLETE", "COMPLETED", "CONFIRMED"].includes(transfer.state.toUpperCase())) {
+    await applyAgentSpend({
+      organizationId: intent.organizationId,
+      paymentIntentId: intent.id,
+      amount: feeAmount,
+      spendKey: `${intent.id}:fee`,
+    });
+    await writeAudit({
+      organizationId: intent.organizationId,
+      actorType: "system",
+      action: "payment.fee_collected",
+      entityType: "payment_intent",
+      entityId: intent.id,
+      metadata: { circleTxId: transfer.id, txHash: transfer.txHash, feeAmount, destination },
+    });
+  }
+  return { ok: true as const, circleTxId: transfer.id, txHash: transfer.txHash };
+}
+
+async function feeContextForIntent(intent: PaymentIntent) {
+  const org = await prisma.organization.findUniqueOrThrow({ where: { id: intent.organizationId } });
+  const agent = await ensureAgentWallet({ organizationId: intent.organizationId, actorType: "system" });
+  if (!agent.circleWalletId) throw new Error("Agent wallet missing circleWalletId");
+  return {
+    mode: (org.paymentMode === "live" ? "live" : "sandbox") as "sandbox" | "live",
+    agentWalletId: agent.circleWalletId,
+    agentAddress: agent.address,
+    provider: agent.provider,
+  };
+}
+
+export async function retryUnpaidPlatformFees(organizationId?: string) {
+  const intents = await prisma.paymentIntent.findMany({
+    where: {
+      ...(organizationId ? { organizationId } : {}),
+      rail: "arc_usdc",
+      status: "completed",
+      feeAmount: { gt: 0 },
+      feeTxHash: null,
+    },
+    take: 8,
+    orderBy: { updatedAt: "asc" },
+  });
+  let retried = 0;
+  for (const intent of intents) {
+    try {
+      await collectPlatformFee(intent, await feeContextForIntent(intent));
+      retried += 1;
+    } catch (err) {
+      console.warn("[custara] fee retry", intent.id, err instanceof Error ? err.message : err);
+    }
+  }
+  return { scanned: intents.length, retried };
+}
+
 async function executeArcTransferTask(taskId: string) {
   const task = await prisma.agentTask.findUniqueOrThrow({
     where: { id: taskId },
@@ -125,7 +249,7 @@ async function executeArcTransferTask(taskId: string) {
       vendorName: beneficiary.vendorName,
       context: "pre_pay",
     });
-    await assertSpendLimits(task.organizationId, intent.amount);
+    await assertSpendLimits(task.organizationId, intent.amount + (intent.feeAmount || 0));
 
     const { assertPayTimeGuards } = await import("@/domain/payGuards");
     await assertPayTimeGuards({
@@ -219,6 +343,11 @@ async function executeArcTransferTask(taskId: string) {
         amount: intent.amount,
         currency: intent.currency,
       });
+      await collectPlatformFee(intent, { mode, agentWalletId: agent.circleWalletId, agentAddress: agent.address, provider: agent.provider }).catch(
+        (err) => {
+          console.warn("[custara] platform fee after vendor pay", err instanceof Error ? err.message : err);
+        },
+      );
     }
 
     await applyAgentSpend({
@@ -419,6 +548,12 @@ async function executeArcReconcileTask(taskId: string) {
 
   await syncWalletBalances(task.organizationId).catch(() => null);
 
+  await collectPlatformFee(await prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } }), await feeContextForIntent(intent)).catch(
+    (err) => {
+      console.warn("[custara] platform fee after reconcile", err instanceof Error ? err.message : err);
+    },
+  );
+
   await writeAudit({
     organizationId: task.organizationId,
     actorType: "system",
@@ -486,7 +621,8 @@ export async function resumeStuckArcPayments(organizationId?: string) {
     });
     resumed += 1;
   }
-  return { scanned: intents.length, resumed };
+  const fees = await retryUnpaidPlatformFees(organizationId);
+  return { scanned: intents.length, resumed, fees };
 }
 
 export async function handleCircleWebhookPayload(payload: Record<string, unknown>) {
@@ -498,13 +634,28 @@ export async function handleCircleWebhookPayload(payload: Record<string, unknown
   if (!txId) return { handled: false };
 
   const intent = await prisma.paymentIntent.findFirst({
-    where: { circleTxId: txId },
+    where: { OR: [{ circleTxId: txId }, { feeCircleTxId: txId }] },
   });
   if (!intent) {
     console.error("[ALERT] circle.unknown_tx", txId, {
       notificationKeys: Object.keys(notification),
     });
     return { handled: false, reason: "unknown_tx", alerted: true };
+  }
+
+  if (intent.feeCircleTxId === txId) {
+    const feeState = String(notification.state || notification.status || "").toUpperCase();
+    const feeHash =
+      (notification.txHash as string) ||
+      (notification.transactionHash as string) ||
+      intent.feeTxHash;
+    if (["COMPLETE", "COMPLETED", "CONFIRMED"].includes(feeState) || feeHash) {
+      await prisma.paymentIntent.update({
+        where: { id: intent.id },
+        data: { feeTxHash: feeHash || intent.feeTxHash },
+      });
+    }
+    return { handled: true, action: "fee_webhook" };
   }
 
   const state = String(notification.state || notification.status || "").toUpperCase();

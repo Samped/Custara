@@ -593,6 +593,10 @@ model PaymentIntent {
   mode            String   @default("sandbox")
   circleTxId      String?
   txHash          String?
+  feeAmount       Float?
+  feeBps          Float?
+  feeTxHash       String?
+  feeCircleTxId   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

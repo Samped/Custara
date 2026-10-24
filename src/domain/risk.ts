@@ -293,6 +293,76 @@ export async function assessRisks(
     });
   }
 
+  if (extraction.odooMoveType === "in_refund") {
+    risks.push({
+      code: "odoo_credit_note",
+      severity: "hard",
+      message: "This Odoo document is a vendor credit. Do not pay it; apply it to an open bill.",
+      evidence: { moveType: extraction.odooMoveType },
+    });
+  }
+  if (extraction.odooPaymentState === "paid" || (extraction.odooResidual != null && extraction.odooResidual <= 0.01)) {
+    risks.push({
+      code: "odoo_already_paid",
+      severity: "hard",
+      message: "Odoo already shows this bill as paid. Custara will not pay it again.",
+      evidence: { paymentState: extraction.odooPaymentState, residual: extraction.odooResidual },
+    });
+  }
+  if (extraction.odooState === "draft") {
+    risks.push({
+      code: "odoo_draft",
+      severity: "medium",
+      message: "This bill is still a draft in Odoo. Approving in Custara will post it there.",
+      evidence: { state: extraction.odooState },
+    });
+  }
+  const current = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { creditWaivedAt: true, creditApplied: true, fiscalPeriodLocked: true },
+  });
+  if (vendor && extraction.odooMoveType !== "in_refund" && !current?.creditWaivedAt && (current?.creditApplied || 0) <= 0.01) {
+    const openCredit = await prisma.invoice.findFirst({
+      where: {
+        organizationId,
+        vendorId: vendor.id,
+        externalId: { startsWith: "odoo-refund:" },
+        status: { notIn: ["void", "reconciled", "rejected"] },
+      },
+      select: { id: true, externalId: true, invoiceNumber: true },
+    });
+    if (openCredit) {
+      risks.push({
+        code: "odoo_open_credit",
+        severity: "hard",
+        message: `Vendor has an open credit (${openCredit.invoiceNumber || openCredit.externalId}). Apply or waive it before paying.`,
+        evidence: { creditInvoiceId: openCredit.id, creditExternalId: openCredit.externalId },
+      });
+    }
+  }
+  if (current?.fiscalPeriodLocked) {
+    risks.push({
+      code: "odoo_fiscal_lock",
+      severity: "hard",
+      message: "Odoo fiscal period is locked for this bill.",
+    });
+  }
+  if (vendor && extraction.lineItems?.length) {
+    const prices = await prisma.vendorSupplierPrice.findMany({ where: { vendorId: vendor.id } });
+    for (const line of extraction.lineItems) {
+      const product = (line.product || line.description || "").trim();
+      const unit = Number(line.unitPrice || 0);
+      const agreed = prices.find((p) => p.product.toLowerCase() === product.toLowerCase());
+      if (agreed && unit > agreed.maxUnitPrice * 1.01) {
+        risks.push({
+          code: "vendor_price_over",
+          severity: "hard",
+          message: `${product} is ${unit} vs agreed ${agreed.maxUnitPrice} ${agreed.currency}.`,
+          evidence: { product, unit, maxUnitPrice: agreed.maxUnitPrice },
+        });
+      }
+    }
+  }
   if (extraction.totalAmount <= 0) {
     risks.push({
       code: "amount_invalid",
@@ -304,6 +374,31 @@ export async function assessRisks(
   const { loadPolicyRules } = await import("@/domain/policy");
   const { matchPurchaseOrder } = await import("@/domain/contracts");
   const policyRules = await loadPolicyRules(organizationId);
+  if (policyRules.requireAnalyticApproval) {
+    const names = (policyRules.analyticApprovalNames || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const analytics = (extraction.lineItems || [])
+      .map((l) => (l.analytic || "").trim())
+      .filter(Boolean);
+    const matched = names.length
+      ? analytics.filter((a) => names.some((n) => a.toLowerCase().includes(n)))
+      : analytics;
+    if (matched.length) {
+      risks.push({
+        code: "analytic_approval",
+        severity: "medium",
+        message: names.length
+          ? `Cost center ${matched[0]} requires approval.`
+          : "This bill is coded to a cost center and the policy requires review.",
+        evidence: { analytics: matched },
+      });
+    }
+  }
+  const billedQty = (extraction.lineItems || [])
+    .filter((l) => l.description !== "Tax")
+    .reduce((n, l) => n + Number(l.quantity || 0), 0);
   const poRisks = await matchPurchaseOrder({
     organizationId,
     vendorId: vendor.id,
@@ -311,6 +406,7 @@ export async function assessRisks(
     poNumber: extraction.poNumber,
     totalAmount: extraction.totalAmount,
     currency: extraction.currency,
+    billedQty: billedQty || null,
     requirePurchaseOrder: Boolean(policyRules.requirePurchaseOrder),
   });
   risks.push(...poRisks);

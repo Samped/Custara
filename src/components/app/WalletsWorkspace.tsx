@@ -3,7 +3,9 @@ import { ConnectTreasuryButton, WalletJsonForm } from "@/components/app/ConnectT
 import { FundAgentButton } from "@/components/app/FundAgentButton";
 import { ensureAgentWallet, listOrgWallets, syncWalletBalances } from "@/domain/arc/wallets";
 import { getDailySpendUsd } from "@/domain/arc/allowlist";
-import { getArcChain, getArcExecutionMode, isCircleConfigured } from "@/domain/arc/config";
+import { getArcChain, getArcExecutionMode, getUsdcTokenAddress, isCircleConfigured } from "@/domain/arc/config";
+
+const ARC_USDC_DEFAULT = "0x3600000000000000000000000000000000000000";
 
 function shortAddr(addr: string) {
   if (addr.length < 14) return addr;
@@ -50,6 +52,13 @@ export async function WalletsWorkspace({
   const treasury = wallets.find((w) => w.role === "treasury_external" && w.status === "active");
   const chain = getArcChain();
   const execution = getArcExecutionMode(org.paymentMode);
+  const isMainnet = chain === "ARC";
+  let usdcAddress = ARC_USDC_DEFAULT;
+  try {
+    usdcAddress = getUsdcTokenAddress();
+  } catch {
+    // Public Arc USDC predeploy; env may still be empty before first live pay gate.
+  }
   const agentNeedsUpgrade =
     Boolean(agent) &&
     (agent!.provider === "sandbox" || Boolean(agent!.circleWalletId?.startsWith("sbx_")));
@@ -145,7 +154,11 @@ export async function WalletsWorkspace({
                     Simulated wallet. Upgrade for live {chain}, then fund with USDC.
                   </p>
                 ) : (
-                  <p className="dash-mini-meta mt-2">Fund USDC, then sync before paying.</p>
+                  <p className="dash-mini-meta mt-2">
+                    {isMainnet
+                      ? "Fund the agent from your wallet, then sync before paying."
+                      : "Fund USDC, then sync before paying."}
+                  </p>
                 )}
               </div>
             ) : (
@@ -156,12 +169,21 @@ export async function WalletsWorkspace({
 
             <div className="wallet-actions wallet-actions-row">
               {!agentNeedsUpgrade && agent ? (
-                <FundAgentButton address={agent.address} disabled={org.agentWalletFrozen} />
+                <FundAgentButton
+                  address={agent.address}
+                  chain={chain}
+                  usdcAddress={usdcAddress}
+                  disabled={org.agentWalletFrozen}
+                />
               ) : null}
               {agentNeedsUpgrade || !agent ? (
                 <WalletJsonForm action="upgrade_agent_circle">
                   <button type="submit" className="btn btn-primary">
-                    {agentNeedsUpgrade ? "Upgrade to Circle testnet" : "Provision Circle agent"}
+                    {agentNeedsUpgrade
+                      ? isMainnet
+                        ? "Upgrade to Circle agent"
+                        : "Upgrade to Circle testnet"
+                      : "Provision Circle agent"}
                   </button>
                 </WalletJsonForm>
               ) : (

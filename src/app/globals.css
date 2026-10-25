@@ -1807,6 +1807,62 @@ a.net-proof-kicker:hover {
   min-width: 10rem;
 }
 
+.fund-wallet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.fund-wallet-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--surface);
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fund-wallet-option:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.fund-wallet-option.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.fund-wallet-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 0.3rem;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.fund-wallet-icon-fallback {
+  display: inline-block;
+  background: var(--border);
+}
+
+.fund-wallet-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 560;
+}
+
+.fund-wallet-addr {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .wallet-allow-form {
   display: grid;
   gap: 0.45rem;

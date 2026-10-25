@@ -4,7 +4,7 @@ export const TESTNET_HOST = "testnet.custara.xyz";
 export const APEX_HOST = "custara.xyz";
 
 export function publicAppUrl() {
-  const raw = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const raw = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").trim().replace(/\/$/, "");
   if (raw) return raw;
   if (getArcChainSafe() === "ARC") return `https://${APEX_HOST}`;
   return `https://${TESTNET_HOST}`;

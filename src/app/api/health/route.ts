@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { redisHealth } from "@/lib/jobs";
 import { storageHealth } from "@/lib/storage";
+import { publicAppUrl } from "@/lib/publicUrl";
 
 export async function GET() {
   const checks: Record<string, { ok: boolean; detail?: string }> = {};
@@ -27,7 +28,7 @@ export async function GET() {
         arc_allow_live_on_testnet: process.env.ARC_ALLOW_LIVE_ON_TESTNET === "true",
         arc_allow_simulated: process.env.ARC_ALLOW_SIMULATED === "true",
         arc_chain: process.env.ARC_CHAIN || "ARC-TESTNET",
-        app_url: process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "",
+        app_url: publicAppUrl(),
         redirect_apex_to_testnet: process.env.REDIRECT_APEX_TO_TESTNET === "true",
         platform_fee_bps: Number(process.env.PLATFORM_FEE_BPS ?? 75),
         platform_fee_address_set: Boolean(process.env.PLATFORM_FEE_ADDRESS?.trim()),

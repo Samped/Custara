@@ -3,7 +3,13 @@ import { ConnectTreasuryButton, WalletJsonForm } from "@/components/app/ConnectT
 import { FundAgentButton } from "@/components/app/FundAgentButton";
 import { ensureAgentWallet, listOrgWallets, syncWalletBalances } from "@/domain/arc/wallets";
 import { getDailySpendUsd } from "@/domain/arc/allowlist";
-import { getArcChain, getArcExecutionMode, getUsdcTokenAddress, isCircleConfigured } from "@/domain/arc/config";
+import {
+  defaultDailySpendLimitUsd,
+  getArcChain,
+  getArcExecutionMode,
+  getUsdcTokenAddress,
+  isCircleConfigured,
+} from "@/domain/arc/config";
 
 const ARC_USDC_DEFAULT = "0x3600000000000000000000000000000000000000";
 
@@ -29,7 +35,14 @@ export async function WalletsWorkspace({
   organizationId: string;
   userId: string;
 }) {
-  const org = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  let org = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  // One-time cutover: mainnet workspaces still on the old 250k default drop to 5k.
+  if (getArcChain() === "ARC" && org.dailySpendLimitUsd === 250000) {
+    org = await prisma.organization.update({
+      where: { id: organizationId },
+      data: { dailySpendLimitUsd: defaultDailySpendLimitUsd() },
+    });
+  }
   await ensureAgentWallet({ organizationId, actorType: "user", actorId: userId });
   let wallets = await listOrgWallets(organizationId);
   try {

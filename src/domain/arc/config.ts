@@ -9,6 +9,11 @@ export function getArcChain(): ArcChain {
   return raw === "ARC" || raw === "ARC-MAINNET" ? "ARC" : "ARC-TESTNET";
 }
 
+/** New-org daily USDC spend cap. Mainnet starts conservative; testnet keeps a higher drill ceiling. */
+export function defaultDailySpendLimitUsd(): number {
+  return getArcChain() === "ARC" ? 5000 : 250000;
+}
+
 export function getUsdcTokenAddress(): string {
   const fromEnv = process.env.ARC_USDC_TOKEN_ADDRESS?.trim();
   if (fromEnv) return fromEnv;

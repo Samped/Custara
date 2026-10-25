@@ -31,7 +31,7 @@ model Organization {
   /// User-initiated payments at or above this USD amount require authenticator step-up.
   mfaPayThresholdUsd Float @default(5000)
   agentWalletFrozen Boolean  @default(false)
-  dailySpendLimitUsd Float   @default(250000)
+  dailySpendLimitUsd Float   @default(5000)
   ingestEmail       String?  @unique // e.g. invoices+acme@ingest.custara.xyz
   autoPayEnabled    Boolean  @default(true)
   /// Target days payable. Null keeps due-date and early-pay discount timing.

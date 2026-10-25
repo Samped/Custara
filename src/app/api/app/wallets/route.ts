@@ -13,6 +13,7 @@ import {
 } from "@/domain/arc/wallets";
 import { addDestination, revokeDestination } from "@/domain/arc/allowlist";
 import { enqueueAgentTask } from "@/domain/arc/tasks";
+import { defaultDailySpendLimitUsd } from "@/domain/arc/config";
 
 export const runtime = "nodejs";
 /** Allow Fund button to wait through Circle faucet rate limits + balance sync. */
@@ -128,7 +129,9 @@ export async function POST(request: NextRequest) {
       await requireSessionUser(["admin"]);
       await prisma.organization.update({
         where: { id: user.organizationId },
-        data: { dailySpendLimitUsd: Number(body.dailySpendLimitUsd || 250000) },
+        data: {
+          dailySpendLimitUsd: Number(body.dailySpendLimitUsd || defaultDailySpendLimitUsd()),
+        },
       });
       return NextResponse.json({ ok: true });
     }

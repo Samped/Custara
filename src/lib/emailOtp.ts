@@ -7,7 +7,7 @@ import { createSession, hashToken, isEmailDomainAllowed, setMfaPending } from ".
 import { isOidcConfigured } from "./oidc";
 import { userNeedsMfaChallenge } from "./mfa";
 import { ensureAgentWallet } from "@/domain/arc/wallets";
-import { getArcChain } from "@/domain/arc/config";
+import { defaultDailySpendLimitUsd, getArcChain } from "@/domain/arc/config";
 import { isMailConfigured, otpEmailContent, sendEmail } from "./mail";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -200,6 +200,7 @@ export async function resolveOrCreateUserByEmail(email: string) {
       paymentMode: "live",
       // Mainnet stays manual until an admin turns autopay on in Settings.
       autoPayEnabled: getArcChain() !== "ARC",
+      dailySpendLimitUsd: defaultDailySpendLimitUsd(),
       displayCurrency: "USD",
       ssoEnforced: false,
       mfaRequiredForRoles: "[]",

@@ -14,7 +14,7 @@ type OtpTokens = {
 };
 
 type CircleSdk = {
-  getDeviceId: () => Promise<string> | string;
+  getDeviceId: () => Promise<string>;
   updateConfigs: (c: unknown, onLogin?: unknown) => void;
   verifyOtp: () => void;
   setAuthentication: (a: { userToken: string; encryptionKey: string }) => void;
@@ -22,6 +22,26 @@ type CircleSdk = {
   setLocalizations?: (loc: unknown) => void;
   setThemeColor?: (theme: unknown) => void;
 };
+
+function deviceIdStorageKey(appId: string) {
+  return `custara_circle_device_id:${appId}`;
+}
+
+/** Circle only accepts device IDs from the Web SDK iframe — never invent UUIDs. */
+async function resolveCircleDeviceId(sdk: CircleSdk, appId: string): Promise<string> {
+  const id = String(await sdk.getDeviceId()).trim();
+  if (!id || id.length < 8) {
+    throw new Error("Could not identify this browser for Circle sign-in. Allow cookies and try again.");
+  }
+  try {
+    window.localStorage.setItem(deviceIdStorageKey(appId), id);
+    // Drop the pre-mainnet unscoped key that caused "device ID is not found".
+    window.localStorage.removeItem("custara_circle_device_id");
+  } catch {
+    // private mode — continue without cache
+  }
+  return id;
+}
 
 type Step = "email" | "code" | "finishing";
 
@@ -159,7 +179,21 @@ export default function CircleEmailOtpLogin({
     const onLoginComplete = (err: unknown, result: LoginResult | null | undefined) => {
       if (!aliveRef.current) return;
       if (err) {
-        setError(loginErrorMessage(err));
+        const msg = loginErrorMessage(err);
+        if (/device.?id/i.test(msg)) {
+          try {
+            window.localStorage.removeItem(deviceIdStorageKey(circleAppId));
+            window.localStorage.removeItem("custara_circle_device_id");
+          } catch {
+            /* ignore */
+          }
+          setDeviceId("");
+          setError(
+            `${msg} Clear this site’s cookies for custara.xyz, refresh, and request a new code.`,
+          );
+        } else {
+          setError(msg);
+        }
         setBusy(false);
         setStep("code");
         return;
@@ -191,6 +225,7 @@ export default function CircleEmailOtpLogin({
         deviceToken: tokens.deviceToken,
         deviceEncryptionKey: tokens.deviceEncryptionKey,
         otpToken: tokens.otpToken,
+        email: { email: pendingEmail.current },
       },
     });
 
@@ -253,16 +288,20 @@ export default function CircleEmailOtpLogin({
         });
 
         try {
-          const cached = window.localStorage.getItem("custara_circle_device_id");
-          if (cached) setDeviceId(cached);
-          else {
-            const id = await Promise.resolve(sdk.getDeviceId());
-            if (cancelled) return;
-            setDeviceId(id);
-            window.localStorage.setItem("custara_circle_device_id", id);
+          // Warm the SDK device iframe; always re-resolve on send so we never
+          // reuse a random UUID or an ID from a previous Circle App ID.
+          window.localStorage.removeItem("custara_circle_device_id");
+          const id = await resolveCircleDeviceId(sdk, circleAppId);
+          if (cancelled) return;
+          setDeviceId(id);
+        } catch (e) {
+          if (!cancelled) {
+            setError(
+              e instanceof Error
+                ? e.message
+                : "Could not prepare this browser for sign-in. Allow third-party cookies and retry.",
+            );
           }
-        } catch {
-          setDeviceId(crypto.randomUUID());
         }
         if (!cancelled) setSdkReady(true);
       } catch (e) {
@@ -303,8 +342,11 @@ export default function CircleEmailOtpLogin({
     pendingEmail.current = nextEmail;
 
     try {
-      const useDeviceId =
-        deviceId || window.localStorage.getItem("custara_circle_device_id") || crypto.randomUUID();
+      const sdk = sdkRef.current;
+      if (!sdk) throw new Error("Sign-in is still loading — wait a moment");
+      const useDeviceId = await resolveCircleDeviceId(sdk, circleAppId);
+      setDeviceId(useDeviceId);
+
       const res = await fetch("/api/auth/circle/email-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -329,7 +371,17 @@ export default function CircleEmailOtpLogin({
       setResendIn(30);
       openCodePanel(tokens);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Request failed");
+      const msg = err instanceof Error ? err.message : "Request failed";
+      if (/device.?id/i.test(msg)) {
+        try {
+          window.localStorage.removeItem(deviceIdStorageKey(circleAppId));
+          window.localStorage.removeItem("custara_circle_device_id");
+        } catch {
+          /* ignore */
+        }
+        setDeviceId("");
+      }
+      setError(msg);
       setBusy(false);
       setStep("email");
       stopEmbedding();

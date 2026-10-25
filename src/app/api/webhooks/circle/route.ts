@@ -3,14 +3,8 @@ import { createHash, timingSafeEqual } from "crypto";
 import { handleCircleWebhookPayload } from "@/domain/arc/tasks";
 
 function verifyCircleSignature(rawBody: string, signature: string | null) {
-  const secret = process.env.CIRCLE_WEBHOOK_SECRET;
-  // Fail closed in production — never accept unsigned Circle webhooks.
-  if (!secret) {
-    if (process.env.NODE_ENV === "production" || process.env.PAYMENT_MODE_FORCE_LIVE === "true") {
-      return false;
-    }
-    return true;
-  }
+  const secret = process.env.CIRCLE_WEBHOOK_SECRET?.trim();
+  if (!secret) return false;
   if (!signature) return false;
   const digest = createHash("sha256").update(`${secret}${rawBody}`).digest("hex");
   const a = Buffer.from(digest);
@@ -19,19 +13,27 @@ function verifyCircleSignature(rawBody: string, signature: string | null) {
   return timingSafeEqual(a, b);
 }
 
+/** Circle pings this URL before it shows the signing secret. */
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    service: "custara",
+    configured: Boolean(process.env.CIRCLE_WEBHOOK_SECRET?.trim()),
+  });
+}
+
 export async function POST(request: NextRequest) {
-  const secret = process.env.CIRCLE_WEBHOOK_SECRET;
-  if (
-    !secret &&
-    (process.env.NODE_ENV === "production" || process.env.REQUIRE_CIRCLE_WEBHOOK_SECRET === "true")
-  ) {
-    return NextResponse.json(
-      { error: "CIRCLE_WEBHOOK_SECRET required in production" },
-      { status: 503 },
-    );
+  const secret = process.env.CIRCLE_WEBHOOK_SECRET?.trim();
+  const raw = await request.text();
+
+  if (!secret) {
+    return NextResponse.json({
+      ok: true,
+      configured: false,
+      note: "Handshake only. Set CIRCLE_WEBHOOK_SECRET to apply payment events.",
+    });
   }
 
-  const raw = await request.text();
   const signature =
     request.headers.get("x-circle-signature") ||
     request.headers.get("circle-signature") ||
@@ -43,14 +45,13 @@ export async function POST(request: NextRequest) {
 
   let payload: Record<string, unknown> = {};
   try {
-    payload = JSON.parse(raw) as Record<string, unknown>;
+    payload = JSON.parse(raw || "{}") as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
   const result = await handleCircleWebhookPayload(payload);
   if (result.reason === "unknown_tx") {
-    // Surface for ops alerting / log scrapers
     console.error("[ALERT] circle.unknown_tx", result);
   }
   return NextResponse.json({ ok: true, ...result });

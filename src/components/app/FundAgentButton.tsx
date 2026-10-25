@@ -34,10 +34,10 @@ type DiscoveredWallet = {
   provider: Eip1193Provider;
 };
 
-declare global {
-  interface Window {
-    ethereum?: Eip1193Provider & { providers?: Eip1193Provider[] };
-  }
+type InjectedEthereum = Eip1193Provider & { providers?: Eip1193Provider[] };
+
+function injectedEthereum(): InjectedEthereum | undefined {
+  return (window as Window & { ethereum?: InjectedEthereum }).ethereum;
 }
 
 function arcNetwork(chain: ArcChainProp) {
@@ -84,11 +84,12 @@ function discoverWallets(): Promise<DiscoveredWallet[]> {
 
     window.setTimeout(() => {
       window.removeEventListener("eip6963:announceProvider", onAnnounce);
-      if (found.size === 0 && window.ethereum) {
-        const providers = window.ethereum.providers?.length
-          ? window.ethereum.providers
-          : [window.ethereum];
-        providers.forEach((provider, index) => {
+      const injected = injectedEthereum();
+      if (found.size === 0 && injected) {
+        const providers: Eip1193Provider[] = injected.providers?.length
+          ? injected.providers
+          : [injected];
+        providers.forEach((provider: Eip1193Provider, index: number) => {
           add({
             uuid: `injected-${index}`,
             name: index === 0 ? "Browser wallet" : `Browser wallet ${index + 1}`,

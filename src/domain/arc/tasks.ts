@@ -126,7 +126,7 @@ async function collectPlatformFee(
     ? await getCircleTransaction(intent.feeCircleTxId).then((tx) => ({
         id: tx.id,
         state: tx.state,
-        txHash: tx.txHash || intent.feeTxHash,
+        txHash: tx.txHash || intent.feeTxHash || null,
         provider: ctx.provider,
       }))
     : await createUsdcTransfer({
@@ -144,7 +144,7 @@ async function collectPlatformFee(
   for (let i = 0; i < 6 && !settled(transfer.state); i++) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const tx = await getCircleTransaction(transfer.id);
-    transfer = { ...transfer, id: tx.id, state: tx.state, txHash: tx.txHash || transfer.txHash };
+    transfer = { ...transfer, id: tx.id, state: tx.state, txHash: tx.txHash || transfer.txHash || null };
   }
 
   const failed = ["FAILED", "CANCELLED", "DENIED"].includes(transfer.state.toUpperCase());
@@ -290,7 +290,7 @@ async function executeArcTransferTask(taskId: string) {
     for (let i = 0; i < 8 && !settled(transfer.state); i++) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const tx = await getCircleTransaction(transfer.id);
-      transfer = { ...transfer, id: tx.id, state: tx.state, txHash: tx.txHash || transfer.txHash };
+      transfer = { ...transfer, id: tx.id, state: tx.state, txHash: tx.txHash || transfer.txHash || null };
     }
 
     await prisma.agentTask.update({

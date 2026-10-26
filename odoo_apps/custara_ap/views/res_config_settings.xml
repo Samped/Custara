@@ -11,7 +11,8 @@
             <field name="custara_api_url"/>
             <field name="custara_api_key" password="True"/>
             <div class="text-muted">
-              Custara approves and pays. Odoo stays the ledger. Settlement is Arc testnet USDC.
+              Custara approves and pays. Odoo stays the ledger. Production API:
+              https://custara.xyz — Arc mainnet USDC. Demo: https://testnet.custara.xyz.
             </div>
           </setting>
         </block>

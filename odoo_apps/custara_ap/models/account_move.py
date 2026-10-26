@@ -74,7 +74,10 @@ class AccountMove(models.Model):
                 raise UserError(_("Could not reach Custara: %s") % err)
             move.custara_sent_at = fields.Datetime.now()
             move.message_post(
-                body=_("Sent to Custara. Settlement, if paid, is Arc testnet USDC — not mainnet.")
+                body=_(
+                    "Sent to Custara. Settlement, if paid, is Arc USDC on the Custara API host "
+                    "(mainnet at custara.xyz; demos may use testnet.custara.xyz)."
+                )
             )
         return True
 

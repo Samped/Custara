@@ -98,7 +98,7 @@ Testnet stays where it is. Apex is a new empty stack.
 7. Connect **production** Odoo with API URL `https://custara.xyz`. Allowlist real vendor `0x`. Enable MFA for pay roles. Leave autopay off.
 8. **Enable pay** only after the mainnet agent holds real USDC and `PLATFORM_FEE_ADDRESS` is a funded mainnet treasury: set `ARC_PAYMENTS_LIVE=true` on apex Vercel + worker, redeploy, then one small real pay.
 
-Odoo Apps listing: customer API URL `https://custara.xyz`; demos `https://testnet.custara.xyz`. List after step 6 (and ideally step 8).
+Odoo Apps listing: free LGPL-3 module in [Samped/custara-odoo](https://github.com/Samped/custara-odoo) branch `18.0`. Register `ssh://git@github.com/Samped/custara-odoo#18.0` on [apps.odoo.com/apps/upload](https://apps.odoo.com/apps/upload) after authorizing GitHub user `online-odoo`. Customer API URL `https://custara.xyz`; demos `https://testnet.custara.xyz`. See [Odoo app](odoo-app.md).
 
 Free Render Postgres is 1 GB, has no backups, and expires 30 days after creation. After a 14-day grace period Render deletes it. Free Key Value is 25 MB and does not keep data across restarts. The worker is a free web service, because background workers are not on the free plan. It sleeps after 15 minutes without HTTP traffic. Autopay, webhook delivery, and polls resume when the next request wakes it. A ping every 10 minutes to the worker `/health` URL keeps it awake.
 

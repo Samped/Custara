@@ -1,20 +1,48 @@
 <section class="oe_container">
   <div class="oe_row oe_spaced">
     <h2 class="oe_slogan">Custara AP</h2>
-    <h3 class="oe_slogan">Approvals and Arc testnet USDC settlement. Odoo stays the ledger.</h3>
+    <h3 class="oe_slogan">Approvals and Arc mainnet USDC settlement. Odoo stays the ledger.</h3>
     <p class="oe_mt32">
       Custara is the accounts-payable control plane for Odoo shops. Reviewers approve in Custara.
-      Payments write back to the same vendor bill. Settlement is <strong>Arc testnet USDC</strong>,
-      not mainnet, until a later compliance gate.
+      Payments write back to the same vendor bill. Settlement is
+      <strong>Arc mainnet USDC</strong> on <a href="https://custara.xyz">custara.xyz</a>.
+      Use <a href="https://testnet.custara.xyz">testnet.custara.xyz</a> only for demos.
     </p>
     <p>
-      Use this module on self-hosted Odoo or list it on odoo.com/apps. Odoo Online can keep using
-      the JSON-RPC API key from Custara → Connectors without installing the module.
+      Use this module on self-hosted Odoo or Odoo.sh. Odoo Online can keep using the JSON-RPC API key
+      from Custara → Connectors without installing the module.
     </p>
     <ul>
       <li>Send vendor bills and credits to Custara Inbox</li>
       <li>Keep Odoo as the book of record</li>
-      <li>Label every remittance as Arc testnet USDC</li>
+      <li>Settle approved bills in Arc mainnet USDC via Circle</li>
+      <li>Dual control, destination allowlist, and hash-chained audit in Custara</li>
     </ul>
+  </div>
+</section>
+
+<section class="oe_container oe_dark">
+  <div class="oe_row oe_spaced">
+    <h3 class="oe_slogan">Setup</h3>
+    <ol>
+      <li>Install <strong>Custara AP</strong> and update the Apps list.</li>
+      <li>
+        Settings → Accounting → Custara AP: set API URL to
+        <code>https://custara.xyz</code> and paste a Custara Partner API key.
+      </li>
+      <li>Open a vendor bill and click <strong>Send to Custara</strong> (or post the bill to auto-push).</li>
+      <li>Approve and pay in Custara. The payment writes back onto the same Odoo bill.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="oe_container">
+  <div class="oe_row oe_spaced">
+    <h3 class="oe_slogan">Support</h3>
+    <p>
+      Product: <a href="https://custara.xyz">https://custara.xyz</a><br/>
+      Docs: <a href="https://github.com/Samped/Custara/blob/master/docs/odoo-app.md">Odoo app guide</a><br/>
+      Listing source: <a href="https://github.com/Samped/custara-odoo">https://github.com/Samped/custara-odoo</a>
+    </p>
   </div>
 </section>

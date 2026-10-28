@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { confirmMfaEnrollment, disableMfa, startMfaEnrollment } from "@/lib/mfa";
 import { currencyFromCountry } from "@/lib/currency";
+import { pajCountryCode } from "@/lib/geoFeatures";
 
 export const runtime = "nodejs";
 
@@ -243,15 +244,15 @@ export async function POST(request: NextRequest) {
       const paymentMode = String(body.paymentMode || "sandbox");
       const nextMode = paymentMode === "live" ? "live" : "sandbox";
       const countryRaw = String(body.country || "").trim().toUpperCase();
-      let country =
-        countryRaw === "NIGERIA" || countryRaw === "NGA" || countryRaw === "NG"
-          ? "NG"
-          : countryRaw.slice(0, 2) || null;
       const currencyRaw = String(body.displayCurrency || "")
         .trim()
         .toUpperCase();
+      let country =
+        pajCountryCode({ country: countryRaw, displayCurrency: currencyRaw }) ||
+        countryRaw.slice(0, 2) ||
+        null;
       const displayCurrency = currencyRaw || (country ? currencyFromCountry(country) : "USD");
-      if (!country && displayCurrency === "NGN") country = "NG";
+      if (!country) country = pajCountryCode({ displayCurrency }) || null;
       const autoPayEnabled = Boolean(body.autoPayEnabled);
       const targetRaw = body.targetDpoDays;
       let targetDpoDays: number | null = null;

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { dispatchWebhook } from "@/lib/webhooks";
 import { encryptField } from "@/lib/crypto";
-import { isNigeriaWorkspace } from "@/lib/geoFeatures";
+import { isPajBankWorkspace, pajCountryCode, pajFiatCurrency } from "@/lib/geoFeatures";
 import { publicAppUrl } from "@/lib/publicUrl";
 import { convertAmount } from "@/lib/currency";
 import { getUsdcTokenAddress } from "@/domain/arc/config";
@@ -55,13 +55,15 @@ export async function ensurePajConnector(organizationId: string) {
   });
 }
 
-export async function requireNigeriaOrg(organizationId: string) {
+export async function requirePajOrg(organizationId: string) {
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: organizationId },
     select: { id: true, country: true, displayCurrency: true, paymentMode: true },
   });
-  if (!isNigeriaWorkspace(org)) {
-    throw new Error("Fund and Withdraw from bank are available for Nigeria workspaces. Set country to Nigeria in Settings.");
+  if (!isPajBankWorkspace(org)) {
+    throw new Error(
+      "Fund and Withdraw from bank are available in PAJ African markets. Set business location in Settings.",
+    );
   }
   return org;
 }
@@ -78,7 +80,9 @@ export async function getPajHomeStatus(organizationId: string) {
     }),
   ]);
   return {
-    nigeria: isNigeriaWorkspace(org),
+    paj: isPajBankWorkspace(org),
+    nigeria: isPajBankWorkspace(org),
+    fiatCurrency: pajFiatCurrency(org),
     configured: pajConfigured(),
     banks: banks.map((b) => ({
       id: b.id,
@@ -91,9 +95,9 @@ export async function getPajHomeStatus(organizationId: string) {
 }
 
 export async function fetchPajBanksForWorkspace(organizationId: string) {
-  await requireNigeriaOrg(organizationId);
+  const org = await requirePajOrg(organizationId);
   if (!pajConfigured()) throw new Error("Bank rails not configured");
-  return listPajBanks("NG");
+  return listPajBanks(pajCountryCode(org) || "NG");
 }
 
 export async function saveWorkspaceBank(input: {
@@ -102,7 +106,7 @@ export async function saveWorkspaceBank(input: {
   accountNumber: string;
   actorId?: string;
 }) {
-  await requireNigeriaOrg(input.organizationId);
+  const org = await requirePajOrg(input.organizationId);
   if (!pajConfigured()) throw new Error("Bank rails not configured");
   await ensurePajConnector(input.organizationId);
   const confirmed = await registerPajBankAccount({
@@ -122,7 +126,7 @@ export async function saveWorkspaceBank(input: {
       bankCode: input.bankCode.trim(),
       accountNumber: confirmed.accountNumber || input.accountNumber.trim(),
       accountName: confirmed.accountName,
-      currency: "NGN",
+      currency: pajFiatCurrency(org) || "NGN",
     },
     update: {
       accountName: confirmed.accountName,
@@ -142,12 +146,15 @@ export async function saveWorkspaceBank(input: {
 
 export async function startPajOnramp(input: {
   organizationId: string;
-  fiatAmountNgn: number;
+  fiatAmountNgn?: number;
+  fiatAmount?: number;
   actorId?: string;
 }) {
-  const org = await requireNigeriaOrg(input.organizationId);
+  const org = await requirePajOrg(input.organizationId);
   if (!pajConfigured()) throw new Error("Bank rails not configured");
-  if (!(input.fiatAmountNgn > 0)) throw new Error("Enter a naira amount to fund");
+  const fiatCurrency = pajFiatCurrency(org) || "NGN";
+  const fiatAmount = Number(input.fiatAmount ?? input.fiatAmountNgn);
+  if (!(fiatAmount > 0)) throw new Error(`Enter a ${fiatCurrency} amount to fund`);
   await ensurePajConnector(input.organizationId);
 
   const agent = await ensureAgentWallet({
@@ -158,8 +165,8 @@ export async function startPajOnramp(input: {
   if (!agent.address) throw new Error("Payment wallet is not ready");
 
   const order = await createPajOnrampOrder({
-    fiatAmount: input.fiatAmountNgn,
-    currency: "NGN",
+    fiatAmount,
+    currency: fiatCurrency,
     chain: "ARC",
     mint: pajMint(),
     recipient: agent.address,
@@ -176,14 +183,15 @@ export async function startPajOnramp(input: {
       idempotencyKey: `paj_onramp_${order.id}`,
       status: mapPajStatus(order.status),
       rail: "paj_onramp",
-      amount: usdc > 0 ? usdc : input.fiatAmountNgn,
-      currency: usdc > 0 ? "USDC" : "NGN",
+      amount: usdc > 0 ? usdc : fiatAmount,
+      currency: usdc > 0 ? "USDC" : fiatCurrency,
       beneficiaryJson: JSON.stringify({
         rail: "paj_onramp",
         accountNumber: order.accountNumber,
         accountName: order.accountName,
         bank: order.bank,
-        fiatAmount: order.fiatAmount ?? input.fiatAmountNgn,
+        fiatAmount: order.fiatAmount ?? fiatAmount,
+        fiatCurrency,
         recipient: agent.address,
         chain: "ARC",
       }),
@@ -200,7 +208,7 @@ export async function startPajOnramp(input: {
     action: "payment.paj_onramp_opened",
     entityType: "payment_intent",
     entityId: intent.id,
-    metadata: { pajOrderId: order.id, fiatAmount: input.fiatAmountNgn },
+    metadata: { pajOrderId: order.id, fiatAmount, fiatCurrency },
   });
 
   return {
@@ -210,7 +218,8 @@ export async function startPajOnramp(input: {
       accountNumber: order.accountNumber,
       accountName: order.accountName,
       bank: order.bank,
-      fiatAmount: order.fiatAmount ?? input.fiatAmountNgn,
+      fiatAmount: order.fiatAmount ?? fiatAmount,
+      fiatCurrency,
       usdcAmount: order.usdcAmount ?? null,
       status: order.status,
     },
@@ -226,7 +235,7 @@ export async function startPajOfframp(input: {
   actorId: string;
   mfaCode?: string | null;
 }) {
-  const org = await requireNigeriaOrg(input.organizationId);
+  const org = await requirePajOrg(input.organizationId);
   if (!pajConfigured()) throw new Error("Bank rails not configured");
   if (!(input.amountUsdc > 0)) throw new Error("Enter a USDC amount to withdraw");
 
@@ -245,7 +254,7 @@ export async function startPajOfframp(input: {
     : null;
   if (!bank) {
     if (!input.bankCode || !input.accountNumber) {
-      throw new Error("Save a Nigerian bank account first");
+      throw new Error("Save a local bank account first");
     }
     bank = await saveWorkspaceBank({
       organizationId: input.organizationId,
@@ -259,7 +268,7 @@ export async function startPajOfframp(input: {
   const order = await createPajOfframpOrder({
     bankCode: bank.bankCode,
     accountNumber: bank.accountNumber,
-    currency: "NGN",
+    currency: pajFiatCurrency(org) || bank.currency || "NGN",
     amount: input.amountUsdc,
     chain: "ARC",
     mint: pajMint(),

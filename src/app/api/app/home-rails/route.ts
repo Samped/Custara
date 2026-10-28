@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     if (action === "fund_bank") {
       const result = await startPajOnramp({
         organizationId: user.organizationId,
-        fiatAmountNgn: Number(body.fiatAmountNgn),
+        fiatAmount: Number(body.fiatAmount ?? body.fiatAmountNgn),
         actorId: user.id,
       });
       return NextResponse.json({

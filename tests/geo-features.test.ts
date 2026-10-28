@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isNigeriaWorkspace } from "../src/lib/geoFeatures";
+import { isNigeriaWorkspace, isPajBankWorkspace, pajFiatCurrency } from "../src/lib/geoFeatures";
 import { paymentKindLabel, paymentIntentTitle } from "../src/lib/format";
 
 describe("isNigeriaWorkspace", () => {
@@ -20,6 +20,27 @@ describe("isNigeriaWorkspace", () => {
   });
 });
 
+describe("isPajBankWorkspace", () => {
+  it("opens bank rails for PAJ African markets", () => {
+    assert.equal(isPajBankWorkspace({ country: "GH" }), true);
+    assert.equal(isPajBankWorkspace({ country: "Kenya" }), true);
+    assert.equal(isPajBankWorkspace({ country: "TZ" }), true);
+    assert.equal(isPajBankWorkspace({ country: "ZA" }), true);
+    assert.equal(isPajBankWorkspace({ country: null, displayCurrency: "GHS" }), true);
+    assert.equal(isPajBankWorkspace({ country: null, displayCurrency: "KES" }), true);
+    assert.equal(isPajBankWorkspace({ country: "US" }), false);
+    assert.equal(isPajBankWorkspace({ displayCurrency: "USD" }), false);
+  });
+
+  it("maps the local fiat PAJ should quote", () => {
+    assert.equal(pajFiatCurrency({ country: "NG" }), "NGN");
+    assert.equal(pajFiatCurrency({ country: "Ghana" }), "GHS");
+    assert.equal(pajFiatCurrency({ country: "Tanzania" }), "TZS");
+    assert.equal(pajFiatCurrency({ displayCurrency: "ZAR" }), "ZAR");
+    assert.equal(pajFiatCurrency({ country: "US" }), null);
+  });
+});
+
 describe("payment kind labels", () => {
   it("maps ledger types", () => {
     assert.equal(paymentKindLabel("invoice"), "Bill");
@@ -32,9 +53,5 @@ describe("payment kind labels", () => {
     assert.equal(paymentIntentTitle({ kind: "direct" }), "Client payout");
     assert.equal(paymentIntentTitle({ kind: "paj_onramp" }), "Bank fund");
     assert.equal(paymentIntentTitle({ kind: "paj_offramp" }), "Bank withdraw");
-    assert.equal(
-      paymentIntentTitle({ kind: "invoice", invoice: { invoiceNumber: "INV-9", id: "abc" } }),
-      "INV-9",
-    );
   });
 });

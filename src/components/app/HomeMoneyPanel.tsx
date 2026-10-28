@@ -89,7 +89,8 @@ function IconChev() {
 }
 
 export function HomeMoneyPanel({
-  nigeria,
+  showBankRails,
+  fiatCurrency,
   canPay,
   agentAddress,
   chain,
@@ -98,7 +99,8 @@ export function HomeMoneyPanel({
   banks,
   mfaEnabled,
 }: {
-  nigeria: boolean;
+  showBankRails: boolean;
+  fiatCurrency: string;
   canPay: boolean;
   agentAddress?: string | null;
   chain: ArcChain;
@@ -193,9 +195,9 @@ export function HomeMoneyPanel({
     setBusy(true);
     setError(null);
     try {
-      const data = await post("fund_bank", { fiatAmountNgn: Number(fiatAmount) });
+      const data = await post("fund_bank", { fiatAmount: Number(fiatAmount) });
       setVirtual(data.order || null);
-      setMessage("Pay this exact naira amount. USDC credits the agent after PAJ confirms.");
+      setMessage(`Pay this exact ${fiatCurrency} amount. USDC credits the agent after PAJ confirms.`);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fund failed");
@@ -215,7 +217,7 @@ export function HomeMoneyPanel({
         accountNumber: !bankAccountId ? newAccountNumber : undefined,
         mfaCode: mfaCode || undefined,
       });
-      setMessage("Withdraw queued. Naira lands after the Arc transfer confirms.");
+      setMessage(`Withdraw queued. ${fiatCurrency} lands after the Arc transfer confirms.`);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Withdraw failed");
@@ -269,7 +271,7 @@ export function HomeMoneyPanel({
     sheet === "fund"
       ? "Add USDC to the workspace payment wallet."
       : sheet === "withdraw"
-        ? "Send agent USDC to a Nigerian bank on PAJ."
+        ? `Send agent USDC to a local bank. PAJ pays out in ${fiatCurrency}.`
         : "Send USDC from the agent wallet to any address.";
 
   const dialog =
@@ -334,25 +336,27 @@ export function HomeMoneyPanel({
                 </span>
                 <IconChev />
               </button>
-              <button
-                type="button"
-                className="money-choice"
-                onClick={() => {
-                  setFundMode("bank");
-                  setError(null);
-                }}
-              >
-                <span className="money-choice-icon">
-                  <IconBank />
-                </span>
-                <span>
-                  <span className="money-choice-title">Nigerian bank</span>
-                  <p className="money-choice-copy">
-                    Pay naira to a one-time virtual account. USDC arrives on Arc.
-                  </p>
-                </span>
-                <IconChev />
-              </button>
+              {showBankRails ? (
+                <button
+                  type="button"
+                  className="money-choice"
+                  onClick={() => {
+                    setFundMode("bank");
+                    setError(null);
+                  }}
+                >
+                  <span className="money-choice-icon">
+                    <IconBank />
+                  </span>
+                  <span>
+                    <span className="money-choice-title">Local bank</span>
+                    <p className="money-choice-copy">
+                      Pay {fiatCurrency} to a one-time virtual account. USDC arrives on Arc.
+                    </p>
+                  </span>
+                  <IconChev />
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -388,7 +392,7 @@ export function HomeMoneyPanel({
                     <dt>Pay exactly</dt>
                     <dd>
                       {virtual.fiatAmount != null
-                        ? new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(
+                        ? new Intl.NumberFormat("en", { style: "currency", currency: fiatCurrency }).format(
                             virtual.fiatAmount,
                           )
                         : "—"}
@@ -400,7 +404,7 @@ export function HomeMoneyPanel({
                   <label className="wallet-field">
                     <span className="dash-mini-label">Amount</span>
                     <div className="money-amount">
-                      <span className="money-amount-affix">NGN</span>
+                      <span className="money-amount-affix">{fiatCurrency}</span>
                       <input
                         className="input"
                         inputMode="decimal"
@@ -595,7 +599,7 @@ export function HomeMoneyPanel({
       <div className="money-rail-head">
         <h2 className="dash-h">Money</h2>
         <div className="money-actions">
-          {nigeria ? (
+          {showBankRails ? (
             <>
               <button type="button" className="money-action money-action--primary" onClick={() => openSheet("fund")}>
                 <span className="money-action-icon">

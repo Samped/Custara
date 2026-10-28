@@ -17,7 +17,7 @@ import { DashboardActivityChart } from "@/components/app/DashboardActivityChart"
 import { ClickableRow } from "@/components/app/ClickableRow";
 import { HomeMoneyPanel } from "@/components/app/HomeMoneyPanel";
 import { canPay } from "@/lib/auth";
-import { isNigeriaWorkspace } from "@/lib/geoFeatures";
+import { isPajBankWorkspace, pajCountryCode, pajFiatCurrency } from "@/lib/geoFeatures";
 import { pajConfigured } from "@/domain/banking/paj";
 import { getArcChain, getUsdcTokenAddress } from "@/domain/arc/config";
 import { prisma } from "@/lib/db";
@@ -40,15 +40,16 @@ export default async function DashboardPage() {
 
   const canUpload = roleHasCapability(user.role, "inbox:write");
   const dash = await getDashboardSummary(user.organizationId);
-  const nigeria = isNigeriaWorkspace(user);
-  if (nigeria && !user.country) {
+  const showBankRails = isPajBankWorkspace(user);
+  const impliedCountry = pajCountryCode(user);
+  if (showBankRails && !user.country && impliedCountry) {
     await prisma.organization.updateMany({
       where: { id: user.organizationId, OR: [{ country: null }, { country: "" }] },
-      data: { country: "NG" },
+      data: { country: impliedCountry },
     });
   }
   const showPay = canPay(user.role);
-  const savedBanks = nigeria
+  const savedBanks = showBankRails
     ? await prisma.bankAccount.findMany({
         where: { organizationId: user.organizationId },
         orderBy: { updatedAt: "desc" },
@@ -127,9 +128,10 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        {showPay || nigeria ? (
+        {showPay || showBankRails ? (
           <HomeMoneyPanel
-            nigeria={nigeria}
+            showBankRails={showBankRails}
+            fiatCurrency={pajFiatCurrency(user) || "NGN"}
             canPay={showPay}
             agentAddress={dash.agentAddress}
             chain={getArcChain()}

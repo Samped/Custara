@@ -3,6 +3,7 @@ import { writeAudit } from "@/lib/audit";
 import { nanoid } from "nanoid";
 import { defaultIngestEmailForSlug } from "@/domain/mailbox";
 import { currencyFromCountry } from "@/lib/currency";
+import { pajCountryCode } from "@/lib/geoFeatures";
 import { normalizeHttpUrl } from "@/lib/businessPresence";
 
 export const BUSINESS_TYPES = [
@@ -70,10 +71,7 @@ export async function completeCompanyOnboarding(input: {
   }
 
   const countryRaw = (input.country || "").trim().toUpperCase();
-  const country =
-    countryRaw === "NIGERIA" || countryRaw === "NGA" || countryRaw === "NG"
-      ? "NG"
-      : countryRaw.slice(0, 2) || null;
+  const country = pajCountryCode({ country: countryRaw }) || countryRaw.slice(0, 2) || null;
   if (!country) throw new Error("Select the country where the company is registered.");
   const displayCurrency = currencyFromCountry(country);
 

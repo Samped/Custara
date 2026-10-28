@@ -59,7 +59,7 @@ Default take is `75` bps (0.75%) of the USDC settlement, floor `0.10` USDC, no c
 
 At pay time there are two transfers: vendor amount, then fee. If the vendor transfer succeeds and the fee fails, the bill stays paid and the fee is retried. The vendor is not clawed back.
 
-Explorer links follow `ARC_CHAIN` (`testnet.arcscan.app` vs `arcscan.app`).
+Explorer links follow `ARC_CHAIN` (`explorer.testnet.arc.io` vs `arc.etherscan.io`).
 
 ## After pay
 

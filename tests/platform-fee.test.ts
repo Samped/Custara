@@ -45,9 +45,9 @@ describe("platformFeeUsdc", () => {
 describe("arc explorer + mainnet gate", () => {
   it("points explorer at the chain", () => {
     process.env.ARC_CHAIN = "ARC-TESTNET";
-    assert.equal(arcExplorerTxUrl("0xabc"), "https://testnet.arcscan.app/tx/0xabc");
+    assert.equal(arcExplorerTxUrl("0xabc"), "https://explorer.testnet.arc.io/tx/0xabc");
     process.env.ARC_CHAIN = "ARC";
-    assert.equal(arcExplorerTxUrl("0xabc"), "https://arcscan.app/tx/0xabc");
+    assert.equal(arcExplorerTxUrl("0xabc"), "https://arc.etherscan.io/tx/0xabc");
   });
 
   it("gates mainnet pay until ARC_PAYMENTS_LIVE", () => {

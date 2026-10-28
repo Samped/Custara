@@ -67,8 +67,8 @@ export type PaymentReceipt = NonNullable<Awaited<ReturnType<typeof getPaymentRec
 
 export function arcExplorerBase() {
   const raw = (process.env.ARC_CHAIN || "ARC-TESTNET").toUpperCase();
-  if (raw === "ARC" || raw === "ARC-MAINNET") return "https://arcscan.app";
-  return "https://testnet.arcscan.app";
+  if (raw === "ARC" || raw === "ARC-MAINNET") return "https://arc.etherscan.io";
+  return "https://explorer.testnet.arc.io";
 }
 
 export function arcExplorerTxUrl(txHash: string) {

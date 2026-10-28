@@ -49,7 +49,7 @@ function arcNetwork(chain: ArcChainProp) {
       chainIdHex: "0x13b2",
       name: "Arc",
       rpcUrl: "https://rpc.mainnet.arc.io",
-      explorer: "https://explorer.arc.io",
+      explorer: "https://arc.etherscan.io",
     };
   }
   return {

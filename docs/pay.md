@@ -16,7 +16,7 @@ The pay button itself is on the invoice, after the bill is `approved`. Under the
 
 ## Receipts
 
-Receipts opens `/app/receipts`. Each receipt is one intent, including settled and in-flight transfers. A transaction hash links to the explorer for this chain (`testnet.arcscan.app` or `arcscan.app`). The Custara fee hash is listed separately when collected.
+Receipts opens `/app/receipts`. Each receipt is one intent, including settled and in-flight transfers. A transaction hash links to the explorer for this chain (`explorer.testnet.arc.io` or `arc.etherscan.io`). The Custara fee hash is listed separately when collected.
 
 ## Wallets
 

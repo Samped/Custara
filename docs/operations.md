@@ -135,6 +135,7 @@ At the registrar for `custara.xyz`:
 - `GET https://testnet.custara.xyz/api/health` returns `ok: true` when Postgres and Redis answer. After cutover, the same check on `https://custara.xyz` hits the **mainnet** database.
 - Circle webhooks go to `{APP_URL}/api/webhooks/circle` for that stack.
 - `CIRCLE_WEBHOOK_SECRET` is set on Vercel. Production rejects unsigned Circle webhooks.
+- PAJ African bank rails: set `PAJ_API_KEY` and `PAJ_WEBHOOK_SECRET` on the Vercel app (not the worker). Ramp webhook `{APP_URL}/api/webhooks/paj`.
 - The worker log shows `worker health listening`.
 - Health `gates.app_url` matches the host you are on.
 
@@ -146,7 +147,8 @@ At the registrar for `custara.xyz`:
 - `STORAGE_BACKEND=s3` with a private bucket
 - `ARC_ALLOW_SIMULATED=false`
 - Circle entity secret and webhook secret are set before live USDC volume
-- `NIGERIA_PAYMENT_LIVE` stays false until a bank partner is contracted
+- `NIGERIA_PAYMENT_LIVE` stays false until the older Nigeria file-export partner is contracted
+- Live African Fund/Withdraw: `PAJ_API_KEY` and `PAJ_WEBHOOK_SECRET` on Vercel; webhook `{APP_URL}/api/webhooks/paj`
 - OIDC is configured if the organization enforces SSO
 - MFA threshold is set to the organization's policy, not left at the default by accident
 - `GET /api/health` returns `ok: true`

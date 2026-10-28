@@ -16,7 +16,8 @@ Create returns a signing secret once (`whsec_…`). It is stored encrypted. Disa
 | `approval.decided` | An approver approved or rejected |
 | `payment.intent_created` | A payment intent was created |
 | `payment.executed` | Nigeria export adapter finished |
-| `payment.failed` | Transfer or adapter failed |
+| `payment.completed` | A PAJ onramp/offramp order reached a terminal success |
+| `payment.failed` | Transfer, adapter, or PAJ order failed |
 | `invoice.reconciled` | A settlement was recorded |
 | `receivable.reminder` | Collections sent a reminder |
 | `*` | Every event above |

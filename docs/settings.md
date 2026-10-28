@@ -22,7 +22,7 @@ Shortcuts to the rest of administration:
 | Field | Effect |
 |-------|--------|
 | Legal name, website, social profile | Shown on the workspace profile |
-| Business location | Suggests the dashboard currency from the country |
+| Business location | Suggests the dashboard currency. Nigeria, Ghana, Tanzania, Kenya, and South Africa also unlock PAJ Fund/Withdraw on Home. |
 | Dashboard currency | Currency used on Home and Cash |
 | Expected inflow 7d / 30d | The inflow side of the Cash outlook |
 | Privacy delete days | How long uploaded document bytes are kept |

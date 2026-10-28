@@ -7,9 +7,14 @@ The agent wallet holds USDC. An agent task is work the worker executes. A person
 ```
 Invoice approved
   → Payer or autopay
-  → payment intent
-       ├─ arc_usdc   → arc_transfer → Circle USDC → arc_reconcile → settlement
-       └─ nigeria_*  → bank export file
+    → payment intent
+       ├─ arc_usdc      → arc_transfer → Circle USDC → arc_reconcile → settlement
+       └─ nigeria_*     → bank export file
+
+Home Money (no invoice)
+  → paj_onramp   → PAJ virtual account → USDC to agent
+  → paj_offramp  → arc_transfer to PAJ Arc address → local bank
+  → direct       → arc_transfer to client 0x (once, weekly, or monthly)
 ```
 
 ## Tasks
@@ -49,9 +54,13 @@ The job runs as the system actor and does not prompt for MFA. Idempotency key: `
 - Synced agent balance covers the amount
 - The payment is under `dailySpendLimitUsd`
 
-### Nigeria
+### Nigeria file export
 
 The same intent API produces an export file. No agent task is created unless `NIGERIA_PAYMENT_LIVE=true`.
+
+### African bank rails and Pay client
+
+Home **Fund** / **Withdraw** (PAJ) and **Pay client** create invoice-less payment intents (`paj_onramp`, `paj_offramp`, `direct`). Offramp and client pay still enqueue `arc_transfer`. Setup is in [Fund, withdraw, Pay client](money-rails.md).
 
 ## Pay timing
 

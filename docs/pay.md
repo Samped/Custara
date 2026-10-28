@@ -28,3 +28,5 @@ Wallets is for admins and payers.
 - **Destinations** lists allowlisted vendor addresses. Adding an address here is the same allowlist used on [Vendors](vendors.md).
 
 The balance on this tab is the balance Custara will spend. Fund the wallet in USDC, then Sync, before a class or a live pay run.
+
+From **Home**, the same agent can **Pay client** (USDC to a `0x` address, once or weekly/monthly) without an invoice. African workspaces can also Fund and Withdraw local currency through PAJ. See [Fund, withdraw, Pay client](money-rails.md).

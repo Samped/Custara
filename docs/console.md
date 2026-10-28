@@ -5,12 +5,12 @@ The signed-in workspace lives under `/app`. The public site is `/` and the netwo
 The **Go to** menu is documented page by page:
 
 - Work — [Home](home.md), [Inbox](inbox.md), [Approvals](approvals.md), [Vendors](vendors.md)
-- Money — [Pay](pay.md), [Cash](cash.md)
+- Money — [Pay](pay.md), [Fund, withdraw, Pay client](money-rails.md), [Cash](cash.md)
 - Admin — [Controls](controls.md), [Roles](roles.md), [Security](app-security.md), [Settings](settings.md), [Connectors](connectors.md)
 
 | Path | Who | Purpose |
 |------|-----|---------|
-| `/app` | Anyone who can read the inbox | Home: approvals waiting, pay queue, open invoices, payment-wallet balance, recent bills |
+| `/app` | Anyone who can read the inbox | Home: approvals waiting, pay queue, open invoices, payment-wallet balance, Fund / Withdraw / Pay client, recent bills |
 | `/app/inbox` | Inbox read; upload needs inbox write | All invoices, upload, mailbox status |
 | `/app/invoices/[id]` | Invoice read | Extraction, risks, approval, and pay |
 | `/app/approvals` | Approver, admin | Maker-checker queue |

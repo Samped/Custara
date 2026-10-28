@@ -4,6 +4,8 @@ Home is `/app`. Open it from **Go to → Work → Home**. Anyone who can read th
 
 Home is the workspace summary. It refreshes every few seconds while the tab is visible, so a bill created from the API or CLI appears without a reload.
 
+Payers and admins see **Money**: **Pay client** in every workspace, plus **Fund** and **Withdraw** when the company of record is Nigeria, Ghana, Tanzania, Kenya, or South Africa. Details are in [Fund, withdraw, Pay client](money-rails.md).
+
 ## What you see
 
 | Card | Opens |

@@ -2,7 +2,9 @@
 
 Approved bills settle in **USDC on Arc**. The agent wallet is a Circle developer-controlled wallet. The vendor destination is an Arc address on the organization allowlist.
 
-Nigeria bank payment produces an export file (`nigeria_sandbox` / `nigeria_export`). Funds move at a bank only when `NIGERIA_PAYMENT_LIVE=true` after partner onboarding.
+African bank **Fund** and **Withdraw** (PAJ) move live local currency — NGN, GHS, TZS, KES, ZAR — against the USDC agent when `PAJ_API_KEY` is set. That is separate from the older Nigeria file-export rail (`nigeria_sandbox` / `nigeria_export`), which still only writes a file unless `NIGERIA_PAYMENT_LIVE=true`.
+
+**Pay client** on Home sends USDC from the agent to any allowlisted `0x` address, once or on a weekly/monthly schedule, with no invoice. See [Fund, withdraw, Pay client](money-rails.md).
 
 Task queues, Circle states, and reconcile are in [Agent payments](agent-payments.md).
 
@@ -86,5 +88,7 @@ A failed intent can be retried from the receipt. Retry sends a new Circle transf
 | `PLATFORM_FEE_ADDRESS` | Custara treasury `0x`. Required before live mainnet pay |
 | `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET` | Developer-controlled wallets |
 | `CIRCLE_WEBHOOK_SECRET` | Verifies Circle webhooks in production |
-| `NIGERIA_PAYMENT_LIVE` | Leave false until a bank partner is live |
+| `PAJ_API_KEY` | Live African bank Fund/Withdraw (NGN, GHS, TZS, KES, ZAR) |
+| `PAJ_WEBHOOK_SECRET` | Verifies `POST /api/webhooks/paj` |
+| `NIGERIA_PAYMENT_LIVE` | Leave false until the older Nigeria file-export partner is live |
 | `API_PAY_STEPUP_SECRET` | When set, API `payments:initiate` in live mode must send `X-Custara-Step-Up` |

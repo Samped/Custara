@@ -73,5 +73,6 @@ Invite teammates from **Settings**. Roles are admin, approver, payer, viewer, an
 3. Allowlist the vendor Arc address, or create the vendor through the API or CLI with `arc_address`, which allowlists it.
 4. Ingest a USDC invoice. A new vendor stays in review until a person approves it.
 5. Pay with rail `arc_usdc` from the invoice screen, the Partner API, or `custara pay`.
+6. From Home, **Pay client** sends USDC to any `0x` without an invoice. African workspaces can **Fund** and **Withdraw** local currency (see [Fund, withdraw, Pay client](money-rails.md)).
 
 Health is `GET /api/health`. A `503` with `checks.database.ok: true` and Redis down means the app is up and the worker queue is not.

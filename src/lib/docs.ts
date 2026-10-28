@@ -30,6 +30,7 @@ export const DOC_PAGES: DocPage[] = [
   { slug: "approvals", file: "approvals.md", title: "Approvals", section: "Work" },
   { slug: "vendors", file: "vendors.md", title: "Vendors", section: "Work" },
   { slug: "pay", file: "pay.md", title: "Pay", section: "Money" },
+  { slug: "money-rails", file: "money-rails.md", title: "Fund, withdraw, Pay client", section: "Money" },
   { slug: "cash", file: "cash.md", title: "Cash", section: "Money" },
   { slug: "controls", file: "controls.md", title: "Controls", section: "Admin" },
   { slug: "roles", file: "roles.md", title: "Roles", section: "Admin" },

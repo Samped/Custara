@@ -63,6 +63,8 @@ model Organization {
   invoiceComments     InvoiceComment[]
   invoiceActivities   InvoiceActivity[]
   payRuns             PayRun[]
+  bankAccounts        BankAccount[]
+  recurringPayouts    RecurringPayout[]
 }
 
 model WorkspaceUser {
@@ -580,10 +582,12 @@ model ApprovalDecision {
 model PaymentIntent {
   id              String   @id @default(cuid())
   organizationId  String
-  invoiceId       String
+  invoiceId       String?
+  /// invoice | direct | paj_onramp | paj_offramp
+  kind            String   @default("invoice")
   idempotencyKey  String
   status          String   @default("created")
-  rail            String   @default("arc_usdc") // arc_usdc | nigeria_sandbox | nigeria_export
+  rail            String   @default("arc_usdc") // arc_usdc | nigeria_sandbox | nigeria_export | paj_onramp | paj_offramp
   amount          Float
   currency        String
   beneficiaryJson String
@@ -601,13 +605,49 @@ model PaymentIntent {
   updatedAt       DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   settlements  Settlement[]
   agentTasks   AgentTask[]
 
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, status])
   @@index([circleTxId])
+  @@index([providerRef])
+}
+
+model BankAccount {
+  id             String   @id @default(cuid())
+  organizationId String
+  bankCode       String
+  accountNumber  String
+  accountName    String
+  currency       String   @default("NGN")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, bankCode, accountNumber])
+  @@index([organizationId])
+}
+
+model RecurringPayout {
+  id             String    @id @default(cuid())
+  organizationId String
+  toAddress      String
+  amount         Float
+  currency       String    @default("USDC")
+  interval       String
+  nextRunAt      DateTime
+  active         Boolean   @default(true)
+  lastIntentId   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([active, nextRunAt])
+  @@index([organizationId, active])
 }
 
 model Settlement {

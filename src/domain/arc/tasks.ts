@@ -94,7 +94,8 @@ export async function runAgentTask(agentTaskId: string) {
   }
 }
 
-async function markInvoicePaymentFailed(invoiceId: string, reason: string) {
+async function markInvoicePaymentFailed(invoiceId: string | null | undefined, reason: string) {
+  if (!invoiceId) return;
   await prisma.invoice.update({
     where: { id: invoiceId },
     data: { status: "payment_failed", explanation: reason },
@@ -255,7 +256,7 @@ async function executeArcTransferTask(taskId: string) {
     await assertPayTimeGuards({
       organizationId: task.organizationId,
       invoiceId: intent.invoiceId,
-      rail: "arc_usdc",
+      rail: intent.rail === "paj_offramp" ? "paj_offramp" : "arc_usdc",
       amount: intent.amount,
       currency: intent.currency,
       arcAddress: destination,
@@ -329,12 +330,14 @@ async function executeArcTransferTask(taskId: string) {
       },
     });
 
-    await prisma.invoice.update({
-      where: { id: intent.invoiceId },
-      data: { status: terminal ? "payment_sent" : "payment_queued" },
-    });
+    if (intent.invoiceId) {
+      await prisma.invoice.update({
+        where: { id: intent.invoiceId },
+        data: { status: terminal ? "payment_sent" : "payment_queued" },
+      });
+    }
 
-    if (terminal) {
+    if (terminal && intent.invoiceId) {
       const { writeOdooPaymentBack } = await import("@/domain/connectors/odoo");
       await writeOdooPaymentBack({
         organizationId: task.organizationId,
@@ -430,7 +433,9 @@ export async function retryFailedArcPayment(input: {
       }
     }
   }
-  if (intent.rail !== "arc_usdc") throw new Error("Only Arc USDC intents can be retried here");
+  if (intent.rail !== "arc_usdc" && intent.rail !== "paj_offramp") {
+    throw new Error("Only Arc USDC intents can be retried here");
+  }
   if (intent.status === "completed" || intent.txHash) {
     // Idempotent — UI may still show Retry briefly after settle.
     return { intent, task: null as null, alreadyCompleted: true as const };
@@ -440,10 +445,12 @@ export async function retryFailedArcPayment(input: {
     where: { id: intent.id },
     data: { status: "pending_transfer", failureReason: null },
   });
-  await prisma.invoice.update({
-    where: { id: intent.invoiceId },
-    data: { status: "payment_queued", explanation: null },
-  });
+  if (intent.invoiceId) {
+    await prisma.invoice.update({
+      where: { id: intent.invoiceId },
+      data: { status: "payment_queued", explanation: null },
+    });
+  }
 
   const task = await enqueueAgentTask({
     organizationId: input.organizationId,
@@ -488,10 +495,12 @@ async function executeArcReconcileTask(taskId: string) {
       where: { id: intent.id },
       data: { status: "failed", failureReason: `Circle tx ${state}` },
     });
-    await prisma.invoice.update({
-      where: { id: intent.invoiceId },
-      data: { status: "payment_failed", explanation: `Circle tx ${state}` },
-    });
+    if (intent.invoiceId) {
+      await prisma.invoice.update({
+        where: { id: intent.invoiceId },
+        data: { status: "payment_failed", explanation: `Circle tx ${state}` },
+      });
+    }
     await restoreAgentSpend({
       organizationId: task.organizationId,
       paymentIntentId: intent.id,
@@ -534,7 +543,7 @@ async function executeArcReconcileTask(taskId: string) {
   const existing = await prisma.settlement.findFirst({
     where: { paymentIntentId: intent.id },
   });
-  if (!existing) {
+  if (!existing && intent.invoiceId) {
     await reconcileSettlement({
       organizationId: task.organizationId,
       invoiceId: intent.invoiceId,
@@ -548,11 +557,13 @@ async function executeArcReconcileTask(taskId: string) {
 
   await syncWalletBalances(task.organizationId).catch(() => null);
 
-  await collectPlatformFee(await prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } }), await feeContextForIntent(intent)).catch(
-    (err) => {
-      console.warn("[custara] platform fee after reconcile", err instanceof Error ? err.message : err);
-    },
-  );
+  if (intent.invoiceId) {
+    await collectPlatformFee(await prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } }), await feeContextForIntent(intent)).catch(
+      (err) => {
+        console.warn("[custara] platform fee after reconcile", err instanceof Error ? err.message : err);
+      },
+    );
+  }
 
   await writeAudit({
     organizationId: task.organizationId,
@@ -570,7 +581,7 @@ export async function resumeStuckArcPayments(organizationId?: string) {
   const intents = await prisma.paymentIntent.findMany({
     where: {
       ...(organizationId ? { organizationId } : {}),
-      rail: "arc_usdc",
+      rail: { in: ["arc_usdc", "paj_offramp"] },
       status: { in: ["queued", "pending_transfer"] },
       updatedAt: { lt: cutoff },
     },
@@ -683,10 +694,12 @@ export async function handleCircleWebhookPayload(payload: Record<string, unknown
       where: { id: intent.id },
       data: { status: "failed", failureReason: `Circle webhook ${state}` },
     });
-    await prisma.invoice.update({
-      where: { id: intent.invoiceId },
-      data: { status: "payment_failed", explanation: `Circle webhook ${state}` },
-    });
+    if (intent.invoiceId) {
+      await prisma.invoice.update({
+        where: { id: intent.invoiceId },
+        data: { status: "payment_failed", explanation: `Circle webhook ${state}` },
+      });
+    }
     await restoreAgentSpend({
       organizationId: intent.organizationId,
       paymentIntentId: intent.id,

@@ -34,14 +34,15 @@ export async function getPaymentReceipt(organizationId: string, paymentIntentId:
       organizationId,
       OR: [
         { entityType: "payment_intent", entityId: intent.id },
-        { entityType: "invoice", entityId: intent.invoiceId },
+        ...(intent.invoiceId
+          ? [
+              { entityType: "invoice" as const, entityId: intent.invoiceId },
+              { action: { contains: "payment" }, entityId: intent.invoiceId },
+            ]
+          : []),
         ...(taskIds.length
           ? [{ entityType: "agent_task" as const, entityId: { in: taskIds } }]
           : []),
-        {
-          action: { contains: "payment" },
-          entityId: intent.invoiceId,
-        },
       ],
     },
     orderBy: { createdAt: "asc" },

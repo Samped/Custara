@@ -144,6 +144,12 @@ async function main() {
       console.log("[recurring-bills]", JSON.stringify({ created: created.length }));
       return;
     }
+    if (name === "run_payouts") {
+      const { runDueRecurringPayouts } = await import("@/domain/directPayout");
+      const results = await runDueRecurringPayouts();
+      console.log("[recurring-payouts]", JSON.stringify({ ran: results.length, ok: results.filter((r) => r.ok).length }));
+      return;
+    }
     if (name !== "run_autopay") throw new Error(`Unknown job ${name}`);
     const summary = await runScheduledAutoPays();
     console.log("[payment-schedule]", JSON.stringify(summary));
@@ -202,6 +208,12 @@ async function main() {
     name: "run_recurring",
     everyMs: 60 * 60_000,
     jobId: "cron-recurring-bills",
+  });
+  await ensureRepeatableJob({
+    queue: "payment-schedule",
+    name: "run_payouts",
+    everyMs: 60 * 60_000,
+    jobId: "cron-recurring-payouts",
   });
   await ensureRepeatableJob({
     queue: "payment-schedule",

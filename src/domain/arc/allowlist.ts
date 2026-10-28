@@ -169,7 +169,7 @@ export async function getDailySpendUsd(organizationId: string) {
   const intents = await prisma.paymentIntent.findMany({
     where: {
       organizationId,
-      rail: "arc_usdc",
+      rail: { in: ["arc_usdc", "paj_offramp"] },
       status: { in: ["submitted", "exported", "completed", "queued", "pending_transfer"] },
       createdAt: { gte: start },
       currency: { in: ["USDC", "USD"] },

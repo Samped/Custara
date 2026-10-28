@@ -159,6 +159,7 @@ export function FundAgentButton({
   buttonLabel,
   className,
   embedded,
+  onFunded,
 }: {
   address?: string | null;
   chain?: ArcChainProp;
@@ -168,6 +169,8 @@ export function FundAgentButton({
   className?: string;
   /** Render wallet/faucet UI inside a parent sheet — no second overlay. */
   embedded?: boolean;
+  /** Called after a mainnet wallet transfer is submitted. */
+  onFunded?: (amountUsdc: number) => void;
 }) {
   const isMainnet = chain === "ARC";
   const router = useRouter();
@@ -307,9 +310,14 @@ export function FundAgentButton({
           },
         ],
       })) as string;
-      setMessage(`Sent. Tx ${txHash.slice(0, 10)}… — click Sync when confirmed.`);
-      setOpen(false);
-      router.refresh();
+      if (onFunded) {
+        onFunded(value);
+        setOpen(false);
+      } else {
+        setMessage(`Sent. Tx ${txHash.slice(0, 10)}… — click Sync when confirmed.`);
+        setOpen(false);
+        router.refresh();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Transfer failed");
     } finally {

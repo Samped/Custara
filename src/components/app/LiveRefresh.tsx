@@ -33,7 +33,7 @@ export function LiveRefresh() {
     void tick();
     const timer = setInterval(() => {
       if (!stopped && document.visibilityState === "visible") void tick();
-    }, 3000);
+    }, 2000);
     const onFocus = () => {
       void tick();
     };

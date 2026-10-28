@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { FundAgentButton } from "@/components/app/FundAgentButton";
@@ -17,6 +17,40 @@ type BankRow = {
 
 type Sheet = "fund" | "withdraw" | "pay" | null;
 type FundMode = "choose" | "wallet" | "bank";
+
+type VirtualOrder = {
+  accountNumber?: string;
+  accountName?: string;
+  bank?: string;
+  fiatAmount?: number;
+  fiatCurrency?: string;
+  usdcAmount?: number | null;
+};
+
+type TrackedIntent = {
+  id: string;
+  kind: "paj_onramp" | "paj_offramp" | "direct";
+  label: string;
+};
+
+type DoneState = {
+  title: string;
+  amountLabel: string;
+  detail: string;
+  kind: TrackedIntent["kind"];
+};
+
+type IntentStatus = {
+  id: string;
+  kind: string;
+  status: string;
+  amount: number;
+  currency: string;
+  txHash?: string | null;
+  failureReason?: string | null;
+  fiatAmount?: number | null;
+  fiatCurrency?: string | null;
+};
 
 function IconPlus() {
   return (
@@ -88,6 +122,37 @@ function IconChev() {
   );
 }
 
+function IconCheck() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden>
+      <circle cx="14" cy="14" r="13" stroke="currentColor" strokeWidth="1.6" opacity="0.35" />
+      <path
+        d="M8.2 14.2 12.1 18l7.7-8.2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function formatMoneyAmount(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toLocaleString("en")} ${currency}`;
+  }
+}
+
+function formatUsdc(amount: number) {
+  return `${amount.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 6 })} USDC`;
+}
+
 export function HomeMoneyPanel({
   showBankRails,
   fiatCurrency,
@@ -111,18 +176,17 @@ export function HomeMoneyPanel({
 }) {
   const router = useRouter();
   const titleId = useId();
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [mounted, setMounted] = useState(false);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [fundMode, setFundMode] = useState<FundMode>("choose");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [virtual, setVirtual] = useState<{
-    accountNumber?: string;
-    accountName?: string;
-    bank?: string;
-    fiatAmount?: number;
-  } | null>(null);
+  const [virtual, setVirtual] = useState<VirtualOrder | null>(null);
+  const [tracked, setTracked] = useState<TrackedIntent | null>(null);
+  const [waiting, setWaiting] = useState(false);
+  const [done, setDone] = useState<DoneState | null>(null);
   const [savedBanks, setSavedBanks] = useState(banks);
   const [pajBanks, setPajBanks] = useState<Array<{ code: string; name: string }>>([]);
   const [fiatAmount, setFiatAmount] = useState("");
@@ -132,30 +196,158 @@ export function HomeMoneyPanel({
   const [newAccountNumber, setNewAccountNumber] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [clientAmount, setClientAmount] = useState("");
-  const [interval, setInterval] = useState("once");
+  const [interval, setIntervalState] = useState("once");
   const [mfaCode, setMfaCode] = useState("");
   const [mfaBlocked, setMfaBlocked] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
   if (!canPay) return null;
 
-  function close() {
-    if (busy) return;
-    setSheet(null);
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function resetFlow() {
+    stopPolling();
     setFundMode("choose");
     setError(null);
     setMessage(null);
     setVirtual(null);
+    setTracked(null);
+    setWaiting(false);
+    setDone(null);
     setMfaCode("");
+    setFiatAmount("");
+    setWithdrawAmount("");
+    setClientAddress("");
+    setClientAmount("");
+    setIntervalState("once");
+  }
+
+  function close() {
+    if (busy && !done) return;
+    const shouldRefresh = Boolean(done);
+    setSheet(null);
+    resetFlow();
+    if (shouldRefresh) router.refresh();
+  }
+
+  function finishDone() {
+    setSheet(null);
+    resetFlow();
+    router.refresh();
   }
 
   function openSheet(next: Sheet) {
-    setError(null);
-    setMessage(null);
-    setVirtual(null);
-    setFundMode("choose");
+    resetFlow();
     setSheet(next);
+  }
+
+  async function refreshHomeBalances() {
+    try {
+      await fetch("/api/app/wallets", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ action: "sync" }),
+      });
+    } catch {
+      /* Home still refreshes from the last known balance. */
+    }
+    router.refresh();
+  }
+
+  function markDoneFromIntent(intent: IntentStatus, kind: TrackedIntent["kind"]) {
+    stopPolling();
+    setWaiting(false);
+    setVirtual(null);
+    setTracked(null);
+    setMessage(null);
+    setError(null);
+
+    if (kind === "paj_onramp") {
+      const usdc = intent.currency === "USDC" ? intent.amount : Number(intent.amount) || 0;
+      const fiat =
+        intent.fiatAmount != null
+          ? formatMoneyAmount(intent.fiatAmount, intent.fiatCurrency || fiatCurrency)
+          : null;
+      setDone({
+        kind,
+        title: "Funded",
+        amountLabel: formatUsdc(usdc),
+        detail: fiat
+          ? `${fiat} received. USDC is on the payment wallet — you can pay bills now.`
+          : "USDC is on the payment wallet — you can pay bills now.",
+      });
+      void refreshHomeBalances();
+      return;
+    }
+
+    if (kind === "paj_offramp") {
+      setDone({
+        kind,
+        title: "Withdraw sent",
+        amountLabel: formatUsdc(intent.amount),
+        detail: `${fiatCurrency} is on the way to your bank. Keep this receipt if you need the transfer hash.`,
+      });
+      void refreshHomeBalances();
+      return;
+    }
+
+    setDone({
+      kind,
+      title: "Paid",
+      amountLabel: formatUsdc(intent.amount),
+      detail: "USDC left the payment wallet for the client address.",
+    });
+    void refreshHomeBalances();
+  }
+
+  function startTracking(next: TrackedIntent) {
+    stopPolling();
+    setTracked(next);
+    setWaiting(true);
+    setError(null);
+
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/app/home-rails?intentId=${encodeURIComponent(next.id)}`, {
+          credentials: "include",
+          headers: { accept: "application/json" },
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          intent?: IntentStatus;
+        };
+        if (!res.ok || !data.intent) return;
+        const intent = data.intent;
+        if (intent.status === "completed" || intent.status === "exported" || intent.status === "submitted") {
+          markDoneFromIntent(intent, next.kind);
+          return;
+        }
+        if (intent.status === "failed") {
+          stopPolling();
+          setWaiting(false);
+          setTracked(null);
+          setError(intent.failureReason || `${next.label} failed`);
+        }
+      } catch {
+        /* keep polling */
+      }
+    };
+
+    void tick();
+    pollRef.current = setInterval(() => void tick(), 2500);
   }
 
   async function post(action: string, extra: Record<string, unknown> = {}) {
@@ -168,7 +360,7 @@ export function HomeMoneyPanel({
     const data = (await res.json().catch(() => ({}))) as {
       error?: string;
       intentId?: string;
-      order?: typeof virtual;
+      order?: VirtualOrder;
       banks?: Array<{ code: string; name: string }>;
       bank?: BankRow;
     };
@@ -197,8 +389,10 @@ export function HomeMoneyPanel({
     try {
       const data = await post("fund_bank", { fiatAmount: Number(fiatAmount) });
       setVirtual(data.order || null);
-      setMessage(`Pay this exact ${fiatCurrency} amount. USDC credits the agent after PAJ confirms.`);
-      router.refresh();
+      setMessage(`Pay this exact ${fiatCurrency} amount. We will mark Funded when PAJ confirms.`);
+      if (data.intentId) {
+        startTracking({ id: data.intentId, kind: "paj_onramp", label: "Fund" });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fund failed");
     } finally {
@@ -210,15 +404,17 @@ export function HomeMoneyPanel({
     setBusy(true);
     setError(null);
     try {
-      await post("withdraw", {
+      const data = await post("withdraw", {
         amountUsdc: Number(withdrawAmount),
         bankAccountId: bankAccountId || undefined,
         bankCode: !bankAccountId ? newBankCode : undefined,
         accountNumber: !bankAccountId ? newAccountNumber : undefined,
         mfaCode: mfaCode || undefined,
       });
-      setMessage(`Withdraw queued. ${fiatCurrency} lands after the Arc transfer confirms.`);
-      router.refresh();
+      setMessage(`Sending ${formatUsdc(Number(withdrawAmount))}. Waiting for the transfer to finish…`);
+      if (data.intentId) {
+        startTracking({ id: data.intentId, kind: "paj_offramp", label: "Withdraw" });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Withdraw failed");
     } finally {
@@ -230,14 +426,20 @@ export function HomeMoneyPanel({
     setBusy(true);
     setError(null);
     try {
-      await post("pay_client", {
+      const data = await post("pay_client", {
         toAddress: clientAddress,
         amountUsdc: Number(clientAmount),
         interval,
         mfaCode: mfaCode || undefined,
       });
-      setMessage(interval === "once" ? "Client payout queued." : "First payout queued. Later runs follow the schedule.");
-      router.refresh();
+      setMessage(
+        interval === "once"
+          ? "Sending to the client. Waiting for confirmation…"
+          : "First payout is sending. Later runs follow the schedule.",
+      );
+      if (data.intentId) {
+        startTracking({ id: data.intentId, kind: "direct", label: "Pay client" });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Pay client failed");
     } finally {
@@ -266,13 +468,23 @@ export function HomeMoneyPanel({
     }
   }
 
-  const title = sheet === "fund" ? "Fund" : sheet === "withdraw" ? "Withdraw" : "Pay client";
-  const lead =
-    sheet === "fund"
+  const title = done
+    ? done.title
+    : sheet === "fund"
+      ? "Fund"
+      : sheet === "withdraw"
+        ? "Withdraw"
+        : "Pay client";
+  const lead = done
+    ? done.detail
+    : sheet === "fund"
       ? "Add USDC to the workspace payment wallet."
       : sheet === "withdraw"
         ? `Send agent USDC to a local bank. PAJ pays out in ${fiatCurrency}.`
         : "Send USDC from the agent wallet to any address.";
+
+  const showForms = !done;
+  const lockForms = waiting || busy;
 
   const dialog =
     sheet && mounted ? (
@@ -292,27 +504,47 @@ export function HomeMoneyPanel({
               </h2>
               <p className="money-sheet-lead">{lead}</p>
             </div>
-            <button type="button" className="money-sheet-x" onClick={close} disabled={busy} aria-label="Close">
+            <button
+              type="button"
+              className="money-sheet-x"
+              onClick={close}
+              disabled={busy && !done}
+              aria-label="Close"
+            >
               <IconX />
             </button>
           </div>
 
-          {sheet === "fund" && fundMode !== "choose" ? (
+          {done ? (
+            <div className="money-done">
+              <div className="money-done-mark" aria-hidden>
+                <IconCheck />
+              </div>
+              <p className="money-done-amount">{done.amountLabel}</p>
+              <p className="money-done-copy">{done.detail}</p>
+              <button type="button" className="btn btn-primary w-full" onClick={finishDone}>
+                Continue
+              </button>
+            </div>
+          ) : null}
+
+          {showForms && sheet === "fund" && fundMode !== "choose" && !waiting ? (
             <button
               type="button"
               className="money-back"
-              disabled={busy}
+              disabled={lockForms}
               onClick={() => {
                 setFundMode("choose");
                 setError(null);
                 setMessage(null);
+                setVirtual(null);
               }}
             >
               ← All methods
             </button>
           ) : null}
 
-          {sheet === "fund" && fundMode === "choose" ? (
+          {showForms && sheet === "fund" && fundMode === "choose" ? (
             <div className="money-choices">
               <button
                 type="button"
@@ -360,45 +592,70 @@ export function HomeMoneyPanel({
             </div>
           ) : null}
 
-          {sheet === "fund" && fundMode === "wallet" ? (
+          {showForms && sheet === "fund" && fundMode === "wallet" ? (
             <FundAgentButton
               embedded
               address={agentAddress}
               chain={chain}
               usdcAddress={usdcAddress}
               disabled={!agentAddress}
+              onFunded={(amountUsdc) => {
+                setDone({
+                  kind: "paj_onramp",
+                  title: "Funded",
+                  amountLabel: formatUsdc(amountUsdc),
+                  detail: "USDC is on the payment wallet — you can pay bills now.",
+                });
+                void (async () => {
+                  for (let i = 0; i < 6; i++) {
+                    await refreshHomeBalances();
+                    await new Promise((r) => setTimeout(r, 2500));
+                  }
+                })();
+              }}
             />
           ) : null}
 
-          {sheet === "fund" && fundMode === "bank" ? (
+          {showForms && sheet === "fund" && fundMode === "bank" ? (
             <div className="space-y-3">
               {!pajConfigured ? (
                 <p className="money-sheet-lead">Bank rails not configured. Add PAJ_API_KEY on the server.</p>
               ) : virtual ? (
-                <dl className="money-virt">
-                  <div className="money-virt-row">
-                    <dt>Bank</dt>
-                    <dd>{virtual.bank || "—"}</dd>
-                  </div>
-                  <div className="money-virt-row">
-                    <dt>Account</dt>
-                    <dd className="font-mono">{virtual.accountNumber || "—"}</dd>
-                  </div>
-                  <div className="money-virt-row">
-                    <dt>Name</dt>
-                    <dd>{virtual.accountName || "—"}</dd>
-                  </div>
-                  <div className="money-virt-row">
-                    <dt>Pay exactly</dt>
-                    <dd>
-                      {virtual.fiatAmount != null
-                        ? new Intl.NumberFormat("en", { style: "currency", currency: fiatCurrency }).format(
-                            virtual.fiatAmount,
-                          )
-                        : "—"}
-                    </dd>
-                  </div>
-                </dl>
+                <>
+                  <dl className="money-virt">
+                    <div className="money-virt-row">
+                      <dt>Bank</dt>
+                      <dd>{virtual.bank || "—"}</dd>
+                    </div>
+                    <div className="money-virt-row">
+                      <dt>Account</dt>
+                      <dd className="font-mono">{virtual.accountNumber || "—"}</dd>
+                    </div>
+                    <div className="money-virt-row">
+                      <dt>Name</dt>
+                      <dd>{virtual.accountName || "—"}</dd>
+                    </div>
+                    <div className="money-virt-row">
+                      <dt>Pay exactly</dt>
+                      <dd>
+                        {virtual.fiatAmount != null
+                          ? formatMoneyAmount(virtual.fiatAmount, virtual.fiatCurrency || fiatCurrency)
+                          : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                  {waiting ? (
+                    <div className="money-wait" role="status" aria-live="polite">
+                      <span className="money-wait-dot" aria-hidden />
+                      <div>
+                        <p className="money-wait-title">Waiting for your bank transfer</p>
+                        <p className="money-wait-copy">
+                          Keep this open. When PAJ confirms, we show Funded with the USDC amount.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <label className="wallet-field">
@@ -409,7 +666,7 @@ export function HomeMoneyPanel({
                         className="input"
                         inputMode="decimal"
                         value={fiatAmount}
-                        disabled={busy}
+                        disabled={lockForms}
                         onChange={(e) => setFiatAmount(e.target.value)}
                         placeholder="150,000"
                       />
@@ -418,7 +675,7 @@ export function HomeMoneyPanel({
                   <button
                     type="button"
                     className="btn btn-primary w-full"
-                    disabled={busy || !fiatAmount.trim()}
+                    disabled={lockForms || !fiatAmount.trim()}
                     onClick={() => void fundBank()}
                   >
                     {busy ? "Opening…" : "Get virtual account"}
@@ -428,10 +685,20 @@ export function HomeMoneyPanel({
             </div>
           ) : null}
 
-          {sheet === "withdraw" ? (
+          {showForms && sheet === "withdraw" ? (
             <div className="space-y-3">
               {!pajConfigured ? (
                 <p className="money-sheet-lead">Bank rails not configured. Add PAJ_API_KEY on the server.</p>
+              ) : waiting ? (
+                <div className="money-wait" role="status" aria-live="polite">
+                  <span className="money-wait-dot" aria-hidden />
+                  <div>
+                    <p className="money-wait-title">Sending withdraw</p>
+                    <p className="money-wait-copy">
+                      Transferring USDC to PAJ. We will show the amount when it completes.
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <>
                   <label className="wallet-field">
@@ -442,7 +709,7 @@ export function HomeMoneyPanel({
                         className="input"
                         inputMode="decimal"
                         value={withdrawAmount}
-                        disabled={busy}
+                        disabled={lockForms}
                         onChange={(e) => setWithdrawAmount(e.target.value)}
                         placeholder="25.00"
                       />
@@ -454,7 +721,7 @@ export function HomeMoneyPanel({
                       <select
                         className="input"
                         value={bankAccountId}
-                        disabled={busy}
+                        disabled={lockForms}
                         onChange={(e) => setBankAccountId(e.target.value)}
                       >
                         {savedBanks.map((b) => (
@@ -471,7 +738,7 @@ export function HomeMoneyPanel({
                         <select
                           className="input"
                           value={newBankCode}
-                          disabled={busy}
+                          disabled={lockForms}
                           onFocus={() => void loadBanks()}
                           onChange={(e) => setNewBankCode(e.target.value)}
                         >
@@ -488,12 +755,17 @@ export function HomeMoneyPanel({
                         <input
                           className="input"
                           value={newAccountNumber}
-                          disabled={busy}
+                          disabled={lockForms}
                           onChange={(e) => setNewAccountNumber(e.target.value)}
                           placeholder="0123456789"
                         />
                       </label>
-                      <button type="button" className="btn btn-secondary w-full" disabled={busy} onClick={() => void saveBank()}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary w-full"
+                        disabled={lockForms}
+                        onClick={() => void saveBank()}
+                      >
                         Confirm account
                       </button>
                     </div>
@@ -506,18 +778,20 @@ export function HomeMoneyPanel({
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         value={mfaCode}
-                        disabled={busy}
+                        disabled={lockForms}
                         onChange={(e) => setMfaCode(e.target.value)}
                         placeholder="6-digit TOTP"
                       />
                     </label>
                   ) : mfaBlocked ? (
-                    <p className="money-note money-note--err">Set up MFA in Security before withdrawing at this amount.</p>
+                    <p className="money-note money-note--err">
+                      Set up MFA in Security before withdrawing at this amount.
+                    </p>
                   ) : null}
                   <button
                     type="button"
                     className="btn btn-primary w-full"
-                    disabled={busy || !withdrawAmount.trim()}
+                    disabled={lockForms || !withdrawAmount.trim()}
                     onClick={() => void withdraw()}
                   >
                     {busy ? "Working…" : "Withdraw"}
@@ -527,69 +801,88 @@ export function HomeMoneyPanel({
             </div>
           ) : null}
 
-          {sheet === "pay" ? (
+          {showForms && sheet === "pay" ? (
             <div className="space-y-3">
-              <label className="wallet-field">
-                <span className="dash-mini-label">Wallet address</span>
-                <input
-                  className="input font-mono"
-                  value={clientAddress}
-                  disabled={busy}
-                  onChange={(e) => setClientAddress(e.target.value)}
-                  placeholder="0x…"
-                />
-              </label>
-              <label className="wallet-field">
-                <span className="dash-mini-label">Amount</span>
-                <div className="money-amount">
-                  <span className="money-amount-affix">USDC</span>
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    value={clientAmount}
-                    disabled={busy}
-                    onChange={(e) => setClientAmount(e.target.value)}
-                    placeholder="10.00"
-                  />
+              {waiting ? (
+                <div className="money-wait" role="status" aria-live="polite">
+                  <span className="money-wait-dot" aria-hidden />
+                  <div>
+                    <p className="money-wait-title">Paying client</p>
+                    <p className="money-wait-copy">Waiting for the Arc transfer to confirm.</p>
+                  </div>
                 </div>
-              </label>
-              <label className="wallet-field">
-                <span className="dash-mini-label">Schedule</span>
-                <select className="input" value={interval} disabled={busy} onChange={(e) => setInterval(e.target.value)}>
-                  <option value="once">One-time</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </label>
-              {mfaEnabled ? (
-                <label className="wallet-field">
-                  <span className="dash-mini-label">MFA code</span>
-                  <input
-                    className="input"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    value={mfaCode}
-                    disabled={busy}
-                    onChange={(e) => setMfaCode(e.target.value)}
-                    placeholder="6-digit TOTP"
-                  />
-                </label>
-              ) : mfaBlocked ? (
-                <p className="money-note money-note--err">Set up MFA in Security before paying at this amount.</p>
-              ) : null}
-              <button
-                type="button"
-                className="btn btn-primary w-full"
-                disabled={busy || !clientAddress.trim() || !clientAmount.trim()}
-                onClick={() => void sendClient()}
-              >
-                {busy ? "Working…" : "Send"}
-              </button>
+              ) : (
+                <>
+                  <label className="wallet-field">
+                    <span className="dash-mini-label">Wallet address</span>
+                    <input
+                      className="input font-mono"
+                      value={clientAddress}
+                      disabled={lockForms}
+                      onChange={(e) => setClientAddress(e.target.value)}
+                      placeholder="0x…"
+                    />
+                  </label>
+                  <label className="wallet-field">
+                    <span className="dash-mini-label">Amount</span>
+                    <div className="money-amount">
+                      <span className="money-amount-affix">USDC</span>
+                      <input
+                        className="input"
+                        inputMode="decimal"
+                        value={clientAmount}
+                        disabled={lockForms}
+                        onChange={(e) => setClientAmount(e.target.value)}
+                        placeholder="10.00"
+                      />
+                    </div>
+                  </label>
+                  <label className="wallet-field">
+                    <span className="dash-mini-label">Schedule</span>
+                    <select
+                      className="input"
+                      value={interval}
+                      disabled={lockForms}
+                      onChange={(e) => setIntervalState(e.target.value)}
+                    >
+                      <option value="once">One-time</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </label>
+                  {mfaEnabled ? (
+                    <label className="wallet-field">
+                      <span className="dash-mini-label">MFA code</span>
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        value={mfaCode}
+                        disabled={lockForms}
+                        onChange={(e) => setMfaCode(e.target.value)}
+                        placeholder="6-digit TOTP"
+                      />
+                    </label>
+                  ) : mfaBlocked ? (
+                    <p className="money-note money-note--err">
+                      Set up MFA in Security before paying at this amount.
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn btn-primary w-full"
+                    disabled={lockForms || !clientAddress.trim() || !clientAmount.trim()}
+                    onClick={() => void sendClient()}
+                  >
+                    {busy ? "Working…" : "Send"}
+                  </button>
+                </>
+              )}
             </div>
           ) : null}
 
-          {error ? <p className="money-note money-note--err">{error}</p> : null}
-          {message ? <p className="money-note money-note--ok">{message}</p> : null}
+          {!done && error ? <p className="money-note money-note--err">{error}</p> : null}
+          {!done && message && !waiting ? <p className="money-note money-note--ok">{message}</p> : null}
         </div>
       </div>
     ) : null;

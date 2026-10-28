@@ -7,7 +7,7 @@ import { publicAppUrl } from "@/lib/publicUrl";
 import { convertAmount } from "@/lib/currency";
 import { getUsdcTokenAddress } from "@/domain/arc/config";
 import { addDestination } from "@/domain/arc/allowlist";
-import { ensureAgentWallet } from "@/domain/arc/wallets";
+import { applyAgentDeposit, ensureAgentWallet, syncWalletBalances } from "@/domain/arc/wallets";
 import { enqueueAgentTask } from "@/domain/arc/tasks";
 import { assertPayStepUp } from "@/domain/payStepUp";
 import { assertPayTimeGuards } from "@/domain/payGuards";
@@ -368,6 +368,14 @@ export async function handlePajWebhookPayload(payload: PajTransaction) {
   });
 
   if (status === "completed") {
+    if (intent.kind === "paj_onramp" && nextCurrency === "USDC" && nextAmount > 0) {
+      await applyAgentDeposit({
+        organizationId: intent.organizationId,
+        paymentIntentId: intent.id,
+        amount: nextAmount,
+      });
+      await syncWalletBalances(intent.organizationId, { trustIncrease: true }).catch(() => null);
+    }
     await dispatchWebhook(intent.organizationId, "payment.completed", {
       id: intent.id,
       kind: intent.kind,

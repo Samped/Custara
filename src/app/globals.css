@@ -2242,6 +2242,95 @@ html.dark .money-action--primary .money-action-icon {
   color: var(--danger);
 }
 
+.money-done {
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+  padding: 0.35rem 0 0.15rem;
+  text-align: center;
+}
+
+.money-done-mark {
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 999px;
+  color: var(--accent);
+  background:
+    radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--accent) 28%, transparent), transparent 62%),
+    var(--accent-soft);
+}
+
+.money-done-amount {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 1.65rem;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+}
+
+.money-done-copy {
+  margin: 0;
+  max-width: 22rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.money-done .btn {
+  margin-top: 0.55rem;
+}
+
+.money-wait {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in oklab, var(--accent) 24%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--accent-soft) 40%, var(--surface));
+}
+
+.money-wait-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 45%, transparent);
+  animation: money-wait-pulse 1.4s ease-out infinite;
+}
+
+.money-wait-title {
+  margin: 0;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.money-wait-copy {
+  margin: 0.25rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+@keyframes money-wait-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 0.55rem transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
 .money-sheet .upload-modal-actions {
   margin-top: 0.9rem;
 }

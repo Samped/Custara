@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthError, requireSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import {
   fetchPajBanksForWorkspace,
   getPajHomeStatus,
@@ -9,6 +10,7 @@ import {
 } from "@/domain/banking/pajRails";
 import { payClient } from "@/domain/directPayout";
 import { isMfaSetupRequiredError } from "@/domain/payStepUp";
+import { applyAgentDeposit, syncWalletBalances } from "@/domain/arc/wallets";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -22,9 +24,69 @@ function jsonError(e: unknown) {
   return NextResponse.json({ error: message }, { status });
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const user = await requireSessionUser(undefined, "payments:read");
+    const intentId = request.nextUrl.searchParams.get("intentId")?.trim();
+    if (intentId) {
+      const intent = await prisma.paymentIntent.findFirst({
+        where: { id: intentId, organizationId: user.organizationId },
+        select: {
+          id: true,
+          kind: true,
+          status: true,
+          amount: true,
+          currency: true,
+          txHash: true,
+          failureReason: true,
+          beneficiaryJson: true,
+        },
+      });
+      if (!intent) {
+        return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+      }
+      let fiatAmount: number | null = null;
+      let fiatCurrency: string | null = null;
+      try {
+        const bene = JSON.parse(intent.beneficiaryJson || "{}") as {
+          fiatAmount?: number | null;
+          fiatCurrency?: string | null;
+        };
+        if (typeof bene.fiatAmount === "number") fiatAmount = bene.fiatAmount;
+        if (typeof bene.fiatCurrency === "string") fiatCurrency = bene.fiatCurrency;
+      } catch {
+        /* ignore */
+      }
+      const terminal =
+        intent.status === "completed" ||
+        intent.status === "exported" ||
+        intent.status === "submitted";
+      if (terminal && intent.kind === "paj_onramp" && intent.currency === "USDC" && intent.amount > 0) {
+        await applyAgentDeposit({
+          organizationId: user.organizationId,
+          paymentIntentId: intent.id,
+          amount: intent.amount,
+        });
+        await syncWalletBalances(user.organizationId, { trustIncrease: true }).catch(() => null);
+      }
+      if (terminal && (intent.kind === "paj_offramp" || intent.kind === "direct")) {
+        await syncWalletBalances(user.organizationId).catch(() => null);
+      }
+
+      return NextResponse.json({
+        intent: {
+          id: intent.id,
+          kind: intent.kind,
+          status: intent.status,
+          amount: intent.amount,
+          currency: intent.currency,
+          txHash: intent.txHash,
+          failureReason: intent.failureReason,
+          fiatAmount,
+          fiatCurrency,
+        },
+      });
+    }
     const status = await getPajHomeStatus(user.organizationId);
     return NextResponse.json(status);
   } catch (e) {

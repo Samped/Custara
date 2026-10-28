@@ -468,6 +468,51 @@ function roundUsdc(amount: number) {
   return Math.round(amount * 100) / 100;
 }
 
+/** Raise the agent balance as soon as a bank fund settles. Circle's read often lags. */
+export async function applyAgentDeposit(input: {
+  organizationId: string;
+  paymentIntentId: string;
+  amount: number;
+}) {
+  const already = await prisma.auditEvent.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      action: "wallet.balance_deposited",
+      entityId: input.paymentIntentId,
+    },
+    select: { id: true },
+  });
+  if (already) return;
+
+  const agent = await prisma.orgWallet.findFirst({
+    where: { organizationId: input.organizationId, role: "agent", status: "active" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!agent || !(input.amount > 0)) return;
+
+  const before = agent.balanceUsdc ?? 0;
+  const ledger = roundUsdc(before + input.amount);
+  const chain = await getWalletUsdcBalance({
+    walletId: agent.circleWalletId,
+    address: agent.address,
+    provider: agent.provider,
+  }).catch(() => null);
+  const balance = chain != null && chain > before + 0.009 ? chain : ledger;
+
+  await prisma.orgWallet.update({
+    where: { id: agent.id },
+    data: { balanceUsdc: balance, balanceSyncedAt: new Date() },
+  });
+  await writeAudit({
+    organizationId: input.organizationId,
+    actorType: "system",
+    action: "wallet.balance_deposited",
+    entityType: "payment_intent",
+    entityId: input.paymentIntentId,
+    metadata: { amount: input.amount, before, balance, paymentIntentId: input.paymentIntentId },
+  });
+}
+
 /** Drop the agent balance as soon as a transfer is accepted. Circle's read often lags. */
 export async function applyAgentSpend(input: {
   organizationId: string;

@@ -1,6 +1,6 @@
 # Custara
 
-Custara is an accounts-payable system for B2B teams. It takes invoices from email, upload, CSV, or API, runs extraction and risk checks, applies a versioned approval policy, and settles approved bills in USDC on Arc through Circle. Test data lives on `testnet.custara.xyz`; `custara.xyz` is the empty mainnet host. Nigeria bank movement is an export file unless a licensed live flag is on.
+Custara is an accounts-payable system for B2B teams. It takes invoices from email, upload, CSV, or API, runs extraction and risk checks, applies a versioned approval policy, and settles approved bills in USDC on Arc through Circle. From Home, a payer can also **Pay client** (USDC to any `0x`, once or on a schedule) and, in PAJ African markets, **Fund** and **Withdraw** local currency (NGN, GHS, TZS, KES, ZAR) against that same USDC agent. Test data lives on `testnet.custara.xyz`; `custara.xyz` is the empty mainnet host. The older Nigeria file-export rail stays off unless `NIGERIA_PAYMENT_LIVE` is on.
 
 This repo is the full app: console, Partner API, CLI, background worker, and Postgres schema.
 
@@ -13,14 +13,14 @@ This repo is the full app: console, Partner API, CLI, background worker, and Pos
 ## What it does
 
 ```
-ingest → extract → risk → policy → (approve) → pay timing → payment intent → Arc / NG export → reconcile
+ingest → extract → risk → policy → (approve) → pay timing → payment intent → Arc / African bank (PAJ) / NG export → reconcile
 ```
 
 | Area | Details |
 |------|---------|
 | Ingest | Upload, CSV, org ingest email, mailbox webhook, SFTP drop, FIRS e-invoice, Odoo connector, ERP adapters, vendor portal |
 | Controls | Versioned policies, maker-checker approvals, MFA above a USD threshold, destination allowlist, spend caps |
-| Money | Arc USDC via Circle agent wallet; Nigeria rail is export/sandbox unless partner live is enabled |
+| Money | Arc USDC via Circle agent wallet; Pay client (direct or scheduled); PAJ Fund/Withdraw in NGN, GHS, TZS, KES, ZAR; Nigeria file export unless `NIGERIA_PAYMENT_LIVE` |
 | Audit | Hash-chained events, request IDs, SIEM export |
 | API | Scoped keys, idempotency, rate limits — `GET /api/openapi` |
 
@@ -127,7 +127,8 @@ Auth:
 Payments:
 
 - Arc: Circle developer-controlled wallet keys + `CIRCLE_WEBHOOK_SECRET` (required in production).
-- Nigeria live bank movement stays gated behind `NIGERIA_PAYMENT_LIVE=true`.
+- PAJ African bank Fund/Withdraw: `PAJ_API_KEY` and `PAJ_WEBHOOK_SECRET` on the Vercel app. Webhook URL `{APP_URL}/api/webhooks/paj`.
+- Nigeria file-export rail stays gated behind `NIGERIA_PAYMENT_LIVE=true`.
 
 Optional: OIDC (`OIDC_*`), Xero/QBO/Sage/Zoho, mailbox/SFTP/WhatsApp, S3 storage — all documented in `.env.example`.
 
@@ -137,7 +138,7 @@ Optional: OIDC (`OIDC_*`), Xero/QBO/Sage/Zoho, mailbox/SFTP/WhatsApp, S3 storage
 
 | Path | Purpose |
 |------|---------|
-| `/app` | Ops overview + team invites (admin) |
+| `/app` | Home: ops overview, Fund / Withdraw / Pay client, team invites (admin) |
 | `/app/inbox` | Ingest and triage |
 | `/app/approvals` | Maker-checker |
 | `/app/policies` | Publish / simulate rules |
@@ -216,7 +217,7 @@ docs/             # Operator and integrator handbook
 - Each email maps to one workspace membership (login resumes the same startup). Admins invite teammates from the dashboard Team panel with roles: Viewer, Approver, Payer (upload + pay), Auditor, Admin (API + settings).
 - SSO users must be invited first; OIDC is supported, SCIM/SAML are not.
 - Destination screening defaults to allowlist-only; optional HTTP screener via `SCREENING_PROVIDER`.
-- Nigeria fiat is file export unless a licensed partner live flag is set.
+- Live African bank Fund/Withdraw uses PAJ on the company-of-record country. The older Nigeria fiat path is file export unless `NIGERIA_PAYMENT_LIVE` is set.
 
 ---
 

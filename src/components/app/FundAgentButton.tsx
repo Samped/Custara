@@ -156,11 +156,18 @@ export function FundAgentButton({
   chain = "ARC-TESTNET",
   usdcAddress = ARC_USDC,
   disabled,
+  buttonLabel,
+  className,
+  embedded,
 }: {
   address?: string | null;
   chain?: ArcChainProp;
   usdcAddress?: string;
   disabled?: boolean;
+  buttonLabel?: string;
+  className?: string;
+  /** Render wallet/faucet UI inside a parent sheet — no second overlay. */
+  embedded?: boolean;
 }) {
   const isMainnet = chain === "ARC";
   const router = useRouter();
@@ -195,13 +202,13 @@ export function FundAgentButton({
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !embedded) return;
     void discoverWallets().then(setWallets);
     dialogRef.current?.focus();
-  }, [open]);
+  }, [open, embedded]);
 
   useEffect(() => {
-    if (!open || mode !== "scan" || !paymentUri) {
+    if ((!open && !embedded) || mode !== "scan" || !paymentUri) {
       setQrDataUrl(null);
       return;
     }
@@ -321,45 +328,48 @@ export function FundAgentButton({
   }
 
   if (!isMainnet) {
+    if (embedded) {
+      return (
+        <div className="space-y-3">
+          <p className="money-sheet-lead">
+            Copy the agent address, open Circle’s faucet, send Arc testnet USDC, then Sync.
+          </p>
+          <div className="money-addr">
+            <code>{address || "Wallet not ready"}</code>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={disabled || !address || busy}
+              onClick={() => void copyText(address || "", "Address copied.")}
+            >
+              Copy
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary w-full"
+            disabled={disabled || !address}
+            onClick={fundTestnet}
+          >
+            Open Circle faucet
+          </button>
+          {message ? <p className="money-note money-note--ok">{message}</p> : null}
+          {error ? <p className="money-note money-note--err">{error}</p> : null}
+        </div>
+      );
+    }
     return (
       <div>
-        <button type="button" className="btn btn-primary" disabled={disabled || !address} onClick={fundTestnet}>
-          Fund testnet USDC
+        <button type="button" className={className || "btn btn-primary"} disabled={disabled || !address} onClick={fundTestnet}>
+          {buttonLabel || "Fund testnet USDC"}
         </button>
         {message ? <p className="mt-1.5 text-[0.72rem] text-accent">{message}</p> : null}
       </div>
     );
   }
 
-  const dialog = open ? (
-    <div className="upload-modal-root" onMouseDown={closeModal}>
-      <div
-        ref={dialogRef}
-        className="upload-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="upload-modal-head">
-          <div>
-            <p className="dash-kicker">Agent</p>
-            <h2 id={titleId} className="upload-modal-title">
-              Fund agent
-            </h2>
-            <p className="upload-modal-sub">
-              Send real USDC on Arc to{" "}
-              <span className="font-mono">
-                {address?.slice(0, 6)}…{address?.slice(-4)}
-              </span>
-            </p>
-          </div>
-          <button type="button" className="upload-modal-close" onClick={closeModal} disabled={busy} aria-label="Close">
-            Close
-          </button>
-        </div>
-
+  const walletBody = (
+    <>
         <div className="fund-mode-tabs" role="tablist" aria-label="Funding method">
           <button
             type="button"
@@ -492,9 +502,11 @@ export function FundAgentButton({
         {error ? <p className="upload-modal-error">{error}</p> : null}
 
         <div className="upload-modal-actions">
-          <button type="button" className="btn btn-secondary" onClick={closeModal} disabled={busy}>
-            {mode === "scan" ? "Done" : "Cancel"}
-          </button>
+          {embedded ? null : (
+            <button type="button" className="btn btn-secondary" onClick={closeModal} disabled={busy}>
+              {mode === "scan" ? "Done" : "Cancel"}
+            </button>
+          )}
           {mode === "connect" ? (
             <button
               type="button"
@@ -519,14 +531,60 @@ export function FundAgentButton({
             </button>
           )}
         </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div>
+        <p className="money-sheet-lead mb-3">
+          Send USDC on Arc to{" "}
+          <span className="font-mono text-foreground">
+            {address?.slice(0, 6)}…{address?.slice(-4)}
+          </span>
+        </p>
+        {walletBody}
+      </div>
+    );
+  }
+
+  const dialog = open ? (
+    <div className="upload-modal-root" onMouseDown={closeModal}>
+      <div
+        ref={dialogRef}
+        className="upload-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="upload-modal-head">
+          <div>
+            <p className="dash-kicker">Agent</p>
+            <h2 id={titleId} className="upload-modal-title">
+              Fund agent
+            </h2>
+            <p className="upload-modal-sub">
+              Send real USDC on Arc to{" "}
+              <span className="font-mono">
+                {address?.slice(0, 6)}…{address?.slice(-4)}
+              </span>
+            </p>
+          </div>
+          <button type="button" className="upload-modal-close" onClick={closeModal} disabled={busy} aria-label="Close">
+            Close
+          </button>
+        </div>
+        {walletBody}
       </div>
     </div>
   ) : null;
 
   return (
     <div>
-      <button type="button" className="btn btn-primary" disabled={disabled || !address} onClick={openFundModal}>
-        Fund agent
+      <button type="button" className={className || "btn btn-primary"} disabled={disabled || !address} onClick={openFundModal}>
+        {buttonLabel || "Fund agent"}
       </button>
       {message ? <p className="mt-1.5 text-[0.72rem] text-accent">{message}</p> : null}
       {mounted && dialog ? createPortal(dialog, document.body) : null}

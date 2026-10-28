@@ -1926,6 +1926,330 @@ a.net-proof-kicker:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.money-rail {
+  padding: 0.85rem 1.05rem;
+}
+
+.money-rail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+}
+
+.money-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.money-action {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.2rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 1.6%, var(--surface));
+  color: inherit;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.money-action:hover {
+  border-color: color-mix(in oklab, var(--accent) 42%, var(--line));
+  background: color-mix(in oklab, var(--accent-soft) 55%, var(--surface));
+}
+
+.money-action:active {
+  transform: translateY(1px);
+}
+
+.money-action--primary {
+  border-color: color-mix(in oklab, var(--accent) 28%, var(--line));
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--accent) 9%, var(--surface)), var(--surface) 70%);
+}
+
+.money-action--primary:hover {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+}
+
+.money-action-icon {
+  display: grid;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.money-action--primary .money-action-icon {
+  color: #fff;
+  background: var(--accent);
+}
+
+html.dark .money-action--primary .money-action-icon {
+  color: #042f2e;
+}
+
+.money-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: color-mix(in oklab, #07090b 62%, transparent);
+  backdrop-filter: blur(16px) saturate(1.1);
+}
+
+.money-sheet {
+  width: min(26.5rem, 100%);
+  max-height: min(90vh, 40rem);
+  overflow: auto;
+  padding: 1.25rem 1.25rem 1.15rem;
+  border: 1px solid color-mix(in oklab, var(--line) 80%, var(--accent) 20%);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--foreground) 4%, transparent),
+    0 28px 60px -28px rgba(0, 0, 0, 0.55);
+  outline: none;
+}
+
+.money-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.money-sheet-title {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.money-sheet-lead {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.money-sheet-x {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.money-sheet-x:hover {
+  color: var(--foreground);
+  background: var(--accent-soft);
+}
+
+.money-choices {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.money-choice {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--foreground) 1.5%, var(--surface));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.money-choice:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--accent) 48%, var(--line));
+  background: color-mix(in oklab, var(--accent-soft) 70%, var(--surface));
+}
+
+.money-choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.money-choice-icon {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.money-choice-title {
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.money-choice-copy {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.money-choice-go {
+  color: var(--muted);
+}
+
+.money-back {
+  margin: 0 0 0.85rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.money-back:hover {
+  color: var(--accent);
+}
+
+.money-amount {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--input-bg);
+}
+
+.money-amount:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+.money-amount-affix {
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.money-amount .input {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  height: 2.55rem;
+  padding: 0;
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.money-virt {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--accent-soft) 45%, var(--surface));
+}
+
+.money-virt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.78rem;
+}
+
+.money-virt-row dt {
+  color: var(--muted);
+}
+
+.money-virt-row dd {
+  font-family: var(--font-display), Outfit, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-align: right;
+}
+
+.money-addr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--foreground) 2%, var(--surface));
+}
+
+.money-addr code {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  word-break: break-all;
+  color: var(--foreground);
+}
+
+.money-note {
+  margin: 0.85rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.money-note--ok {
+  color: var(--accent);
+}
+
+.money-note--err {
+  color: var(--danger);
+}
+
+.money-sheet .upload-modal-actions {
+  margin-top: 0.9rem;
+}
+
+.money-sheet .upload-modal-actions .btn-primary {
+  width: 100%;
+}
+
 .wallet-allow-form {
   display: grid;
   gap: 0.45rem;
@@ -2723,6 +3047,18 @@ a.net-proof-kicker:hover {
   .site-footer-mark {
     width: 2.75rem;
     height: 2.75rem;
+  }
+
+  .money-sheet-root {
+    padding: 0;
+    align-items: end;
+  }
+
+  .money-sheet {
+    width: 100%;
+    max-height: min(92vh, 44rem);
+    border-radius: 20px 20px 0 0;
+    padding: 1.15rem 1.15rem 1.35rem;
   }
 }
 

@@ -15,6 +15,12 @@ import {
 import { InvoiceUploadForm } from "@/components/app/InvoiceUploadForm";
 import { DashboardActivityChart } from "@/components/app/DashboardActivityChart";
 import { ClickableRow } from "@/components/app/ClickableRow";
+import { HomeMoneyPanel } from "@/components/app/HomeMoneyPanel";
+import { canPay } from "@/lib/auth";
+import { isNigeriaWorkspace } from "@/lib/geoFeatures";
+import { pajConfigured } from "@/domain/banking/paj";
+import { getArcChain, getUsdcTokenAddress } from "@/domain/arc/config";
+import { prisma } from "@/lib/db";
 
 function invoiceLabel(status: string) {
   if (status === "pending_approval") return "Needs approval";
@@ -34,6 +40,20 @@ export default async function DashboardPage() {
 
   const canUpload = roleHasCapability(user.role, "inbox:write");
   const dash = await getDashboardSummary(user.organizationId);
+  const nigeria = isNigeriaWorkspace(user);
+  const showPay = canPay(user.role);
+  const savedBanks = nigeria
+    ? await prisma.bankAccount.findMany({
+        where: { organizationId: user.organizationId },
+        orderBy: { updatedAt: "desc" },
+      })
+    : [];
+  let usdcAddress = "0x3600000000000000000000000000000000000000";
+  try {
+    usdcAddress = getUsdcTokenAddress();
+  } catch {
+    usdcAddress = "0x3600000000000000000000000000000000000000";
+  }
   const currency = dash.displayCurrency || dash.forecast.currency;
   const attentionCount = dash.pendingApprovalCount + dash.paymentQueuedCount;
   const agentBal = dash.agentBalance;
@@ -100,6 +120,25 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </section>
+
+        {showPay || nigeria ? (
+          <HomeMoneyPanel
+            nigeria={nigeria}
+            canPay={showPay}
+            agentAddress={dash.agentAddress}
+            chain={getArcChain()}
+            usdcAddress={usdcAddress}
+            pajConfigured={pajConfigured()}
+            banks={savedBanks.map((b) => ({
+              id: b.id,
+              bankCode: b.bankCode,
+              accountNumber: b.accountNumber,
+              accountName: b.accountName,
+              currency: b.currency,
+            }))}
+            mfaEnabled={user.mfaEnabled}
+          />
+        ) : null}
 
         <section className="dash-kpi-grid">
           {queue.map((item) => (

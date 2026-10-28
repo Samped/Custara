@@ -69,8 +69,12 @@ export async function completeCompanyOnboarding(input: {
     if (clash) slug = slugifyCompanyName(`${name}-${nanoid(2)}`);
   }
 
-  const country = (input.country || "").trim().toUpperCase().slice(0, 2) || null;
-  // Location sets the dashboard default currency; no location → USD.
+  const countryRaw = (input.country || "").trim().toUpperCase();
+  const country =
+    countryRaw === "NIGERIA" || countryRaw === "NGA" || countryRaw === "NG"
+      ? "NG"
+      : countryRaw.slice(0, 2) || null;
+  if (!country) throw new Error("Select the country where the company is registered.");
   const displayCurrency = currencyFromCountry(country);
 
   const updated = await prisma.organization.update({

@@ -242,15 +242,16 @@ export async function POST(request: NextRequest) {
     if (action === "save_org") {
       const paymentMode = String(body.paymentMode || "sandbox");
       const nextMode = paymentMode === "live" ? "live" : "sandbox";
-      const countryRaw = String(body.country || "")
-        .trim()
-        .toUpperCase()
-        .slice(0, 2);
-      const country = countryRaw || null;
+      const countryRaw = String(body.country || "").trim().toUpperCase();
+      let country =
+        countryRaw === "NIGERIA" || countryRaw === "NGA" || countryRaw === "NG"
+          ? "NG"
+          : countryRaw.slice(0, 2) || null;
       const currencyRaw = String(body.displayCurrency || "")
         .trim()
         .toUpperCase();
       const displayCurrency = currencyRaw || (country ? currencyFromCountry(country) : "USD");
+      if (!country && displayCurrency === "NGN") country = "NG";
       const autoPayEnabled = Boolean(body.autoPayEnabled);
       const targetRaw = body.targetDpoDays;
       let targetDpoDays: number | null = null;

@@ -7,9 +7,16 @@ describe("isNigeriaWorkspace", () => {
   it("matches NG regardless of case or spaces", () => {
     assert.equal(isNigeriaWorkspace({ country: "NG" }), true);
     assert.equal(isNigeriaWorkspace({ country: " ng " }), true);
+    assert.equal(isNigeriaWorkspace({ country: "Nigeria" }), true);
     assert.equal(isNigeriaWorkspace({ country: "US" }), false);
     assert.equal(isNigeriaWorkspace({ country: null }), false);
     assert.equal(isNigeriaWorkspace({}), false);
+  });
+
+  it("treats NGN books as Nigeria when country was never stored", () => {
+    assert.equal(isNigeriaWorkspace({ country: null, displayCurrency: "NGN" }), true);
+    assert.equal(isNigeriaWorkspace({ country: "", displayCurrency: "ngn" }), true);
+    assert.equal(isNigeriaWorkspace({ country: null, displayCurrency: "USD" }), false);
   });
 });
 

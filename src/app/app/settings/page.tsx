@@ -97,8 +97,15 @@ export default async function SettingsPage({
           </label>
           <label className="text-sm">
             Business location
-            <select name="country" className="input mt-1" defaultValue={org.country || ""}>
-              <option value="">Not set — USD default</option>
+            <select
+              name="country"
+              required
+              className="input mt-1"
+              defaultValue={org.country || (displayCurrency === "NGN" ? "NG" : "")}
+            >
+              <option value="" disabled>
+                Select country
+              </option>
               {COUNTRY_OPTIONS.map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.label} ({currencyFromCountry(c.code)})

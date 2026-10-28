@@ -58,10 +58,10 @@ export async function ensurePajConnector(organizationId: string) {
 export async function requireNigeriaOrg(organizationId: string) {
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: organizationId },
-    select: { id: true, country: true, paymentMode: true },
+    select: { id: true, country: true, displayCurrency: true, paymentMode: true },
   });
   if (!isNigeriaWorkspace(org)) {
-    throw new Error("Fund and Withdraw from bank are available for Nigeria workspaces. Set country to NG in Settings.");
+    throw new Error("Fund and Withdraw from bank are available for Nigeria workspaces. Set country to Nigeria in Settings.");
   }
   return org;
 }
@@ -70,7 +70,7 @@ export async function getPajHomeStatus(organizationId: string) {
   const [org, banks] = await Promise.all([
     prisma.organization.findUniqueOrThrow({
       where: { id: organizationId },
-      select: { country: true },
+      select: { country: true, displayCurrency: true },
     }),
     prisma.bankAccount.findMany({
       where: { organizationId },

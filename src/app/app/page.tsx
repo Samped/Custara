@@ -41,6 +41,12 @@ export default async function DashboardPage() {
   const canUpload = roleHasCapability(user.role, "inbox:write");
   const dash = await getDashboardSummary(user.organizationId);
   const nigeria = isNigeriaWorkspace(user);
+  if (nigeria && !user.country) {
+    await prisma.organization.updateMany({
+      where: { id: user.organizationId, OR: [{ country: null }, { country: "" }] },
+      data: { country: "NG" },
+    });
+  }
   const showPay = canPay(user.role);
   const savedBanks = nigeria
     ? await prisma.bankAccount.findMany({

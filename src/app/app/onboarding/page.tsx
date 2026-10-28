@@ -122,16 +122,18 @@ export default async function OnboardingPage({
             </div>
             <div>
               <label className="mb-1.5 block text-[0.78rem] font-semibold" htmlFor="country">
-                Business location{" "}
-                <span className="font-normal text-muted">(sets dashboard currency)</span>
+                Business location
               </label>
               <select
                 id="country"
                 name="country"
+                required
                 className="input"
                 defaultValue={org.country || ""}
               >
-                <option value="">Not set — dashboard defaults to USD</option>
+                <option value="" disabled>
+                  Select country
+                </option>
                 {COUNTRY_OPTIONS.map((c) => (
                   <option key={c.code} value={c.code}>
                     {c.label} ({currencyFromCountry(c.code)})

@@ -16,6 +16,12 @@
 /test-fixtures/
 *.pdf
 
+# Demo recordings + local Playwright auth (never commit sessions)
+/demos/*.mp4
+/demos/*.webm
+/demos/.frames/
+/.auth/
+
 # next.js
 /.next/
 /out/

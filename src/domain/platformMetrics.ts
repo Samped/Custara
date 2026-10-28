@@ -17,6 +17,29 @@ const OPEN_STATUSES = [
   "received",
   "extracting",
 ] as const;
+const RAIL_SETTLED_STATUSES = new Set(["completed", "exported", "submitted"]);
+
+export type RailIntentRow = {
+  status: string;
+  amount: number;
+  currency: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** Bank in/out and client pays have no invoice, so they never hit Settlement. */
+export function railActivityTotals(rails: RailIntentRow[]) {
+  let processed = 0;
+  let settled = 0;
+  let volumeUsd = 0;
+  for (const row of rails) {
+    processed += 1;
+    if (!RAIL_SETTLED_STATUSES.has(row.status)) continue;
+    settled += 1;
+    volumeUsd += convertAmount(row.amount, row.currency, "USD");
+  }
+  return { processed, settled, volumeUsd };
+}
 
 /** Average day gap for events inside [start, end). Null when the window is empty. */
 export function averageDayGap(
@@ -66,6 +89,7 @@ export async function getPlatformMetrics() {
     invoicesCreated30,
     settlementsCreated30,
     orgsRegistered30,
+    railIntents,
   ] = await Promise.all([
     prisma.organization.findMany({
       select: {
@@ -119,6 +143,16 @@ export async function getPlatformMetrics() {
       where: { onboardingCompletedAt: { gte: since30 } },
       select: { onboardingCompletedAt: true },
     }),
+    prisma.paymentIntent.findMany({
+      where: { invoiceId: null },
+      select: {
+        status: true,
+        amount: true,
+        currency: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
   ]);
 
   const businessesRegistered = orgs.filter((o) => o.onboardingCompletedAt != null).length;
@@ -126,7 +160,8 @@ export async function getPlatformMetrics() {
 
   const settledInvoiceIdSet = new Set(settlementInvoiceIds.map((s) => s.invoiceId));
   for (const inv of settledStatusInvoiceIds) settledInvoiceIdSet.add(inv.id);
-  const invoicesSettled = settledInvoiceIdSet.size;
+  const rail = railActivityTotals(railIntents);
+  const invoicesSettled = settledInvoiceIdSet.size + rail.settled;
 
   let transactionsTotal = 0;
   let transactionsCompleted = 0;
@@ -145,7 +180,7 @@ export async function getPlatformMetrics() {
   for (const inv of duplicateStatusInvoiceIds) duplicateInvoiceIds.add(inv.id);
   const duplicatesDetected = duplicateInvoiceIds.size;
 
-  let settledVolumeUsd = 0;
+  let settledVolumeUsd = rail.volumeUsd;
   for (const s of settlements) {
     settledVolumeUsd += convertAmount(s.amount, s.currency, "USD");
   }
@@ -159,6 +194,11 @@ export async function getPlatformMetrics() {
     const idx = invoiceIndex.get(key);
     if (idx != null) invoiceSeries[idx].count += 1;
   }
+  for (const row of railIntents) {
+    const key = dayKey(row.createdAt);
+    const idx = invoiceIndex.get(key);
+    if (idx != null) invoiceSeries[idx].count += 1;
+  }
 
   const settlementSeries = emptySeries(30, now);
   const settlementIndex = new Map(settlementSeries.map((p, i) => [p.date, i]));
@@ -168,6 +208,15 @@ export async function getPlatformMetrics() {
     if (idx != null) {
       settlementSeries[idx].count += 1;
       settlementSeries[idx].amount += convertAmount(s.amount, s.currency, "USD");
+    }
+  }
+  for (const row of railIntents) {
+    if (!RAIL_SETTLED_STATUSES.has(row.status) || row.updatedAt < since30) continue;
+    const key = dayKey(row.updatedAt);
+    const idx = settlementIndex.get(key);
+    if (idx != null) {
+      settlementSeries[idx].count += 1;
+      settlementSeries[idx].amount += convertAmount(row.amount, row.currency, "USD");
     }
   }
 
@@ -215,7 +264,7 @@ export async function getPlatformMetrics() {
   return {
     businessesRegistered,
     verifiedBusinesses,
-    invoicesProcessed,
+    invoicesProcessed: invoicesProcessed + rail.processed,
     invoicesSettled,
     transactionsTotal,
     transactionsCompleted,

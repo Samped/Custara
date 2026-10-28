@@ -1,7 +1,7 @@
 {
     "name": "Custara AP",
     "summary": "Send vendor bills to Custara for approval and Arc mainnet USDC settlement. Odoo stays the ledger.",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.0.2",
     "category": "Accounting/Accounting",
     "author": "Custara",
     "website": "https://custara.xyz",
@@ -13,6 +13,12 @@
     ],
     "images": [
         "static/description/main_screenshot.png",
+        "static/description/screen_login.png",
+        "static/description/screen_connect.png",
+        "static/description/screen_odoo_settings.png",
+        "static/description/screen_odoo_send.png",
+        "static/description/screen_controls.png",
+        "static/description/screen_pay.png",
     ],
     "installable": True,
     "application": False,

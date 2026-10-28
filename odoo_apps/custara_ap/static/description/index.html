@@ -1,48 +1,350 @@
 <section class="oe_container">
-  <div class="oe_row oe_spaced">
-    <h2 class="oe_slogan">Custara AP</h2>
-    <h3 class="oe_slogan">Approvals and Arc mainnet USDC settlement. Odoo stays the ledger.</h3>
-    <p class="oe_mt32">
-      Custara is the accounts-payable control plane for Odoo shops. Reviewers approve in Custara.
-      Payments write back to the same vendor bill. Settlement is
-      <strong>Arc mainnet USDC</strong> on <a href="https://custara.xyz">custara.xyz</a>.
-      Use <a href="https://testnet.custara.xyz">testnet.custara.xyz</a> only for demos.
-    </p>
-    <p>
-      Use this module on self-hosted Odoo or Odoo.sh. Odoo Online can keep using the JSON-RPC API key
-      from Custara → Connectors without installing the module.
-    </p>
-    <ul>
-      <li>Send vendor bills and credits to Custara Inbox</li>
-      <li>Keep Odoo as the book of record</li>
-      <li>Settle approved bills in Arc mainnet USDC via Circle</li>
-      <li>Dual control, destination allowlist, and hash-chained audit in Custara</li>
-    </ul>
-  </div>
-</section>
+  <style>
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 500 700;
+      font-display: swap;
+      src: url("fonts/outfit-latin.woff2") format("woff2");
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 500 700;
+      font-display: swap;
+      src: url("fonts/outfit-latinext.woff2") format("woff2");
+      unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    @font-face {
+      font-family: "Manrope";
+      font-style: normal;
+      font-weight: 500 700;
+      font-display: swap;
+      src: url("fonts/manrope-latin.woff2") format("woff2");
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: "Manrope";
+      font-style: normal;
+      font-weight: 500 700;
+      font-display: swap;
+      src: url("fonts/manrope-latinext.woff2") format("woff2");
+      unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    .ca {
+      --bg: #f7f8f9;
+      --fg: #0a0f12;
+      --muted: #66747c;
+      --accent: #0c5f58;
+      --soft: #e8f4f2;
+      --line: rgba(10, 15, 18, 0.07);
+      --grid: rgba(10, 15, 18, 0.04);
+      --surface: #fff;
+      --radius: 10px;
+      --shadow: 0 0 0 1px rgba(10, 15, 18, 0.03), 0 10px 28px -18px rgba(10, 15, 18, 0.22);
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 0 2.5rem;
+      color: var(--fg);
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+        var(--bg);
+      background-size: 32px 32px, 32px 32px, auto;
+      font-family: "Manrope", ui-sans-serif, sans-serif;
+      font-weight: 500;
+      letter-spacing: -0.011em;
+      -webkit-font-smoothing: antialiased;
+    }
+    .ca * { box-sizing: border-box; }
+    .ca a { color: inherit; }
+    .ca-shell { width: min(1120px, calc(100% - 2.5rem)); margin-inline: auto; }
+    .ca-head {
+      display: flex; align-items: center; justify-content: space-between;
+      min-height: 3.5rem; border-bottom: 1px solid var(--line);
+      background: rgba(247, 248, 249, 0.86);
+    }
+    .ca-brand { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; }
+    .ca-brand img { width: 28px; height: 28px; display: block; }
+    .ca-brand span {
+      font-family: "Outfit", ui-sans-serif, sans-serif;
+      font-size: 1.05rem; font-weight: 650; letter-spacing: -0.04em;
+    }
+    .ca-head-links { display: flex; align-items: center; gap: 1.1rem; }
+    .ca-head-links a {
+      font-size: 0.84rem; font-weight: 600; letter-spacing: -0.02em;
+      color: var(--muted); text-decoration: none;
+    }
+    .ca-hero { padding: 3.4rem 0 2.6rem; }
+    .ca-hero h1 {
+      margin: 0;
+      font-family: "Outfit", ui-sans-serif, sans-serif;
+      font-size: clamp(2.6rem, 6.4vw, 4.6rem);
+      font-weight: 600;
+      letter-spacing: -0.055em;
+      line-height: 0.94;
+    }
+    .ca-dot {
+      display: inline-block; width: 0.22em; height: 0.22em; margin-left: 0.08em;
+      border-radius: 999px; background: var(--accent); vertical-align: 0.18em;
+    }
+    .ca-line {
+      margin: 1.1rem 0 0;
+      max-width: 22rem;
+      font-family: "Outfit", ui-sans-serif, sans-serif;
+      font-size: clamp(1.12rem, 2vw, 1.35rem);
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      color: var(--muted);
+    }
+    .ca-explain {
+      margin: 0.85rem 0 0;
+      max-width: 32rem;
+      font-size: 0.92rem;
+      font-weight: 400;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+    .ca-actions { display: flex; align-items: center; gap: 1.25rem; margin-top: 2rem; flex-wrap: wrap; }
+    .ca-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 3.1rem; padding: 0 1.4rem; border-radius: 9px;
+      background: #0a0f12; color: #fff; text-decoration: none;
+      font-family: "Outfit", ui-sans-serif, sans-serif;
+      font-size: 0.9rem; font-weight: 650; letter-spacing: -0.03em;
+    }
+    .ca-textlink {
+      font-size: 0.92rem; font-weight: 500; color: var(--muted);
+      letter-spacing: -0.02em; text-decoration: none;
+    }
+    .ca-band {
+      display: grid; gap: 1.75rem; align-items: center;
+      padding: 2.4rem 0 2.8rem; border-top: 1px solid var(--line);
+    }
+    .ca-film {
+      margin: 0; position: relative; overflow: hidden;
+      border: 1px solid var(--line); border-radius: 12px;
+      background: #07090b; box-shadow: var(--shadow); text-decoration: none; display: block;
+    }
+    .ca-film-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.55rem 0.8rem; border-bottom: 1px solid rgba(238, 242, 244, 0.08);
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #8d9aa2;
+    }
+    .ca-film img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
+    .ca-play {
+      position: absolute; left: 50%; top: calc(50% + 12px); transform: translate(-50%, -50%);
+      width: 64px; height: 64px; border-radius: 999px;
+      background: rgba(255,255,255,.94); box-shadow: 0 10px 28px -12px rgba(0,0,0,.55);
+    }
+    .ca-play:after {
+      content: ""; position: absolute; left: 25px; top: 21px;
+      border-style: solid; border-width: 11px 0 11px 18px;
+      border-color: transparent transparent transparent #0a0f12;
+    }
+    .ca-kicker {
+      margin: 0; font-size: 0.68rem; font-weight: 600;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+    }
+    .ca-side h2, .ca-block h2 {
+      margin: 0.55rem 0 0;
+      font-family: "Outfit", ui-sans-serif, sans-serif;
+      font-size: clamp(1.45rem, 2.2vw, 1.85rem);
+      font-weight: 600; letter-spacing: -0.04em; line-height: 1.1;
+    }
+    .ca-note { margin: 0.65rem 0 0; max-width: 28rem; font-size: 0.92rem; line-height: 1.5; color: var(--muted); }
+    .ca-guide {
+      display: inline-block; margin-top: 0.9rem; font-size: 0.88rem; font-weight: 600;
+      letter-spacing: -0.02em; color: var(--fg); text-underline-offset: 0.22em;
+    }
+    .ca-features { border-top: 1px solid var(--line); }
+    .ca-item {
+      display: grid; grid-template-columns: 3.5rem 1fr; gap: 1rem;
+      padding: 1.35rem 0; border-bottom: 1px solid var(--line);
+    }
+    .ca-idx {
+      font-family: "Outfit", ui-sans-serif, sans-serif;
+      font-size: 0.75rem; font-weight: 650; letter-spacing: 0.06em;
+      color: var(--muted); padding-top: 0.2rem;
+    }
+    .ca-item h3 {
+      margin: 0;
+      font-family: "Outfit", ui-sans-serif, sans-serif;
+      font-size: 1.05rem; font-weight: 600; letter-spacing: -0.03em;
+    }
+    .ca-item p { margin: 0.4rem 0 0; max-width: 34rem; font-size: 0.92rem; line-height: 1.55; color: var(--muted); }
+    .ca-block { padding: 2.4rem 0 0; }
+    .ca-shot {
+      margin: 1.1rem 0 0; overflow: hidden;
+      border: 1px solid var(--line); border-radius: 12px;
+      background: var(--surface); box-shadow: var(--shadow);
+    }
+    .ca-shot img { display: block; width: 100%; height: auto; border: 0; }
+    .ca-pair { display: grid; gap: 1rem; margin-top: 1.1rem; }
+    .ca-ol { margin: 1rem 0 0; padding-left: 1.15rem; color: var(--fg); font-size: 0.92rem; line-height: 1.7; }
+    .ca-ol li { margin: 0.25rem 0; }
+    .ca-foot {
+      margin-top: 3rem; border-top: 1px solid var(--line); padding: 1.35rem 0 0.4rem;
+    }
+    .ca-foot-bar { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
+    .ca-foot-brand {
+      margin: 0; font-family: "Outfit", ui-sans-serif, sans-serif;
+      font-size: 0.95rem; font-weight: 650; letter-spacing: -0.04em;
+    }
+    .ca-foot-note { margin: 0.2rem 0 0; font-size: 0.78rem; color: var(--muted); }
+    .ca-foot-nav { display: flex; align-items: center; gap: 1.15rem; flex-wrap: wrap; }
+    .ca-foot-nav a {
+      color: var(--muted); font-size: 0.84rem; font-weight: 600;
+      letter-spacing: -0.02em; text-decoration: none;
+    }
+    @media (min-width: 900px) {
+      .ca-band { grid-template-columns: minmax(0, 1.25fr) minmax(240px, 0.75fr); gap: 2.5rem; }
+      .ca-pair { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
 
-<section class="oe_container oe_dark">
-  <div class="oe_row oe_spaced">
-    <h3 class="oe_slogan">Setup</h3>
-    <ol>
-      <li>Install <strong>Custara AP</strong> and update the Apps list.</li>
-      <li>
-        Settings → Accounting → Custara AP: set API URL to
-        <code>https://custara.xyz</code> and paste a Custara Partner API key.
-      </li>
-      <li>Open a vendor bill and click <strong>Send to Custara</strong> (or post the bill to auto-push).</li>
-      <li>Approve and pay in Custara. The payment writes back onto the same Odoo bill.</li>
-    </ol>
-  </div>
-</section>
+  <div class="ca">
+    <div class="ca-head ca-shell">
+      <a class="ca-brand" href="https://custara.xyz">
+        <img src="logo-mark.png" alt=""/>
+        <span>Custara</span>
+      </a>
+      <nav class="ca-head-links">
+        <a href="https://custara.xyz">Product</a>
+        <a href="https://github.com/Samped/Custara/blob/master/docs/odoo-app.md">Docs</a>
+        <a href="https://custara.xyz/login">Sign in</a>
+      </nav>
+    </div>
 
-<section class="oe_container">
-  <div class="oe_row oe_spaced">
-    <h3 class="oe_slogan">Support</h3>
-    <p>
-      Product: <a href="https://custara.xyz">https://custara.xyz</a><br/>
-      Docs: <a href="https://github.com/Samped/Custara/blob/master/docs/odoo-app.md">Odoo app guide</a><br/>
-      Listing source: <a href="https://github.com/Samped/custara-odoo">https://github.com/Samped/custara-odoo</a>
-    </p>
+    <div class="ca-hero ca-shell">
+      <h1>Custara<span class="ca-dot"></span></h1>
+      <p class="ca-line">From vendor bill to authorized payment.</p>
+      <p class="ca-explain">
+        Odoo stays the ledger. Custara is the control plane — dual-control approvals,
+        then Arc mainnet USDC settlement that writes back to the same bill.
+      </p>
+      <div class="ca-actions">
+        <a class="ca-btn" href="https://youtu.be/LD6E4Vsu1Fc">Watch the guide</a>
+        <a class="ca-textlink" href="https://custara.xyz">Open custara.xyz</a>
+        <a class="ca-textlink" href="https://github.com/Samped/Custara/blob/master/docs/odoo-app.md">Documentation</a>
+      </div>
+    </div>
+
+    <div class="ca-band ca-shell">
+      <a class="ca-film" href="https://youtu.be/LD6E4Vsu1Fc" title="Watch the Odoo integration guide">
+        <div class="ca-film-bar"><span>Guide</span><span>YouTube</span></div>
+        <img src="video_thumb.jpg" alt="Custara AP for Odoo — integration walkthrough"/>
+        <span class="ca-play" aria-hidden="true"></span>
+      </a>
+      <div class="ca-side">
+        <p class="ca-kicker">Odoo integration</p>
+        <h2>See the path end to end</h2>
+        <p class="ca-note">
+          Connect Odoo, send a vendor bill, approve in Custara, settle on Arc mainnet,
+          and watch the same bill reconcile.
+        </p>
+        <a class="ca-guide" href="https://youtu.be/LD6E4Vsu1Fc">Play on YouTube</a>
+      </div>
+    </div>
+
+    <div class="ca-shell">
+      <div class="ca-features">
+        <div class="ca-item">
+          <span class="ca-idx">01</span>
+          <div>
+            <h3>Odoo stays the ledger</h3>
+            <p>Taxes, journals, and reconciliation stay in Accounting. Custara never becomes the book of record.</p>
+          </div>
+        </div>
+        <div class="ca-item">
+          <span class="ca-idx">02</span>
+          <div>
+            <h3>Approve with dual control</h3>
+            <p>Policy, MFA, spend limits, and a destination allowlist sit in front of every payment.</p>
+          </div>
+        </div>
+        <div class="ca-item">
+          <span class="ca-idx">03</span>
+          <div>
+            <h3>Settle Arc mainnet USDC</h3>
+            <p>Circle wallets on live rails. A failed pay does not mark the Odoo bill paid.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ca-block">
+        <p class="ca-kicker">Sign in</p>
+        <h2>Work email. One-time code.</h2>
+        <p class="ca-note">Circle OTP on custara.xyz. No shared AP passwords.</p>
+        <figure class="ca-shot">
+          <img src="screen_login.png" alt="Custara sign-in"/>
+        </figure>
+      </div>
+
+      <div class="ca-block">
+        <p class="ca-kicker">Connect</p>
+        <h2>Point Odoo at Custara — or the other way around.</h2>
+        <p class="ca-note">
+          Settings → Accounting → Custara AP, or Connectors in Custara. Then Send to Custara on the bill.
+        </p>
+        <div class="ca-pair">
+          <figure class="ca-shot"><img src="screen_odoo_settings.png" alt="Odoo Settings Custara AP"/></figure>
+          <figure class="ca-shot"><img src="screen_odoo_send.png" alt="Send to Custara on a vendor bill"/></figure>
+        </div>
+        <figure class="ca-shot">
+          <img src="screen_connect.png" alt="Custara Connectors"/>
+        </figure>
+      </div>
+
+      <div class="ca-block">
+        <p class="ca-kicker">Controls</p>
+        <h2>Fund the agent. Cap the day. Allowlist destinations.</h2>
+        <p class="ca-note">Live rails show Arc mainnet. Daily spend starts conservative.</p>
+        <figure class="ca-shot">
+          <img src="screen_controls.png" alt="Wallets and spend controls"/>
+        </figure>
+      </div>
+
+      <div class="ca-block">
+        <p class="ca-kicker">Pay</p>
+        <h2>Write-back to the same bill.</h2>
+        <p class="ca-note">Intents, pay run, receipts. Odoo remains the book of record.</p>
+        <figure class="ca-shot">
+          <img src="screen_pay.png" alt="Custara Pay on Arc mainnet"/>
+        </figure>
+      </div>
+
+      <div class="ca-block">
+        <p class="ca-kicker">Setup</p>
+        <h2>Install, key, send.</h2>
+        <ol class="ca-ol">
+          <li>Install Custara AP on Odoo 18 (self-hosted or Odoo.sh).</li>
+          <li>Settings → Accounting → Custara AP: <code>https://custara.xyz</code> and a Partner API key from Developers.</li>
+          <li>Open a vendor bill → Send to Custara, or post the bill and wait for sync.</li>
+          <li>Approve and pay in Custara. The payment writes back onto that bill.</li>
+        </ol>
+        <p class="ca-note">
+          Odoo Online can skip the module and use Custara → Connectors.
+          Demos only: <a class="ca-guide" href="https://testnet.custara.xyz">testnet.custara.xyz</a>
+        </p>
+      </div>
+    </div>
+
+    <div class="ca-foot">
+      <div class="ca-shell ca-foot-bar">
+        <div>
+          <p class="ca-foot-brand">Custara</p>
+          <p class="ca-foot-note">Accounts payable, settled on Arc.</p>
+        </div>
+        <nav class="ca-foot-nav">
+          <a href="https://custara.xyz">custara.xyz</a>
+          <a href="https://github.com/Samped/Custara/blob/master/docs/odoo-app.md">Docs</a>
+          <a href="https://youtu.be/LD6E4Vsu1Fc">Guide</a>
+          <a href="https://github.com/Samped/custara-odoo">Module source</a>
+        </nav>
+      </div>
+    </div>
   </div>
 </section>

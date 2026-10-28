@@ -17,6 +17,7 @@ import {
   pullRemoteSftpIfConfigured,
 } from "@/domain/sftpIngest";
 import { ensureOdooConnector, listOdooWritebackFailures } from "@/domain/connectors/odoo";
+import { getArcChain } from "@/domain/arc/config";
 
 export default async function ConnectorsPage({
   searchParams,
@@ -219,8 +220,9 @@ export default async function ConnectorsPage({
         <section className="dash-panel">
           <h2 className="dash-h">Odoo</h2>
           <p className="mt-3 text-[0.78rem] text-muted">
-            Odoo stays the ledger. Custara is approvals, risk, and Arc <strong>testnet</strong> USDC
-            settlement. Dual control and payment MFA live under Controls and Security.
+            Odoo stays the ledger. Custara is approvals, risk, and Arc{" "}
+            <strong>{getArcChain() === "ARC" ? "mainnet" : "testnet"}</strong> USDC settlement. Dual
+            control and payment MFA live under Controls and Security.
           </p>
           <p className="mt-2 text-[0.72rem] text-muted">
             {odoo.status === "connected" && odooConfig.origin

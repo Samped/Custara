@@ -8,6 +8,8 @@ import { listPaymentReceipts, isSimulatedIntent } from "@/domain/receipts";
 import {
   formatDate,
   formatMoney,
+  paymentIntentTitle,
+  paymentKindLabel,
   paymentStatusLabel,
   shortHash,
   statusBadgeClass,
@@ -53,7 +55,7 @@ export default async function ReceiptsPage() {
                 <ClickableRow key={intent.id} href={href}>
                   <td>
                     <Link href={href} className="dash-row-title">
-                      {intent.invoice.invoiceNumber || intent.invoiceId.slice(0, 10)}
+                      {paymentIntentTitle(intent)}
                     </Link>
                     <p className="dash-mini-meta">
                       {formatDate(intent.createdAt)}
@@ -61,7 +63,7 @@ export default async function ReceiptsPage() {
                       {simulated ? " · demo" : ""}
                     </p>
                   </td>
-                  <td>{intent.invoice.vendor?.name || "—"}</td>
+                  <td>{intent.invoice?.vendor?.name || paymentKindLabel(intent.kind)}</td>
                   <td className="whitespace-nowrap">{formatMoney(intent.amount, intent.currency)}</td>
                   <td>
                     <span className={`badge ${statusBadgeClass(intent.status)}`}>

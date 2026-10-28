@@ -11,6 +11,7 @@ import {
   formatDate,
   formatMoney,
   humanizePaymentFailure,
+  paymentIntentTitle,
   paymentStatusLabel,
   shortHash,
   statusBadgeClass,
@@ -189,14 +190,18 @@ export default async function PaymentsPage({
               const paid = intent.status === "completed" || intent.status === "exported";
               const failed = intent.status === "failed";
               const failure = failed ? humanizePaymentFailure(intent.failureReason) : null;
-              const canRetry = failed && intent.rail === "arc_usdc" && !simulated && !intent.txHash;
+              const canRetry =
+                failed &&
+                (intent.rail === "arc_usdc" || intent.rail === "paj_offramp") &&
+                !simulated &&
+                !intent.txHash;
               const txHash = intent.txHash && !simulated ? intent.txHash : null;
 
               return (
                 <ClickableRow key={intent.id} href={`/app/receipts/${intent.id}`}>
                   <td>
                     <Link href={`/app/receipts/${intent.id}`} className="dash-row-title">
-                      {intent.invoice.invoiceNumber || intent.invoiceId.slice(0, 10)}
+                      {paymentIntentTitle(intent)}
                     </Link>
                     <p className="dash-mini-meta">
                       {formatDate(intent.createdAt)}

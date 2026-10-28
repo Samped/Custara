@@ -13,6 +13,8 @@ import {
   formatDate,
   formatMoney,
   humanizePaymentFailure,
+  paymentIntentTitle,
+  paymentKindLabel,
   paymentStatusLabel,
   shortHash,
   statusBadgeClass,
@@ -50,7 +52,10 @@ export default async function ReceiptDetailPage({
   const txHash = intent.txHash?.startsWith("0x") && !simulated ? intent.txHash : null;
   const failure = intent.status === "failed" ? humanizePaymentFailure(intent.failureReason) : null;
   const canRetry =
-    intent.status === "failed" && intent.rail === "arc_usdc" && !simulated && !intent.txHash;
+    intent.status === "failed" &&
+    (intent.rail === "arc_usdc" || intent.rail === "paj_offramp") &&
+    !simulated &&
+    !intent.txHash;
 
   const destAddress =
     (typeof beneficiary.arcAddress === "string" && beneficiary.arcAddress) ||
@@ -59,22 +64,24 @@ export default async function ReceiptDetailPage({
   const destName =
     (typeof beneficiary.accountName === "string" && beneficiary.accountName) ||
     (typeof beneficiary.name === "string" && beneficiary.name) ||
-    invoice.vendor?.name ||
-    null;
+    invoice?.vendor?.name ||
+    paymentKindLabel(intent.kind);
 
   return (
     <AppShell
       user={user}
       title="Receipt"
-      subtitle={`${invoice.invoiceNumber || invoice.id.slice(0, 10)} · ${paymentStatusLabel(intent.status)}`}
+      subtitle={`${paymentIntentTitle(intent)} · ${paymentStatusLabel(intent.status)}`}
     >
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link href="/app/receipts" className="btn btn-secondary">
           All receipts
         </Link>
-        <Link href={`/app/invoices/${invoice.id}`} className="btn btn-secondary">
-          Invoice
-        </Link>
+        {invoice ? (
+          <Link href={`/app/invoices/${invoice.id}`} className="btn btn-secondary">
+            Invoice
+          </Link>
+        ) : null}
         {canRetry ? (
           <RetryPaymentButton paymentIntentId={intent.id} mfaEnabled={user.mfaEnabled} />
         ) : null}
@@ -200,18 +207,20 @@ export default async function ReceiptDetailPage({
         <section className="dash-panel">
           <h3 className="dash-h">Invoice &amp; beneficiary</h3>
           <dl className="receipt-dl mt-3">
-            {field(
-              "Invoice",
-              <Link href={`/app/invoices/${invoice.id}`} className="text-accent hover:underline">
-                {invoice.invoiceNumber || invoice.id}
-              </Link>,
-            )}
-            {field("Invoice status", invoice.status.replace(/_/g, " "))}
-            {field("Vendor", invoice.vendor?.name || "—")}
-            {field("Vendor email", invoice.vendor?.email || "—")}
-            {field("Issue date", formatDate(invoice.issueDate))}
-            {field("Due date", formatDate(invoice.dueDate))}
-            {field("Invoice total", formatMoney(invoice.totalAmount, invoice.currency))}
+            {invoice
+              ? field(
+                  "Invoice",
+                  <Link href={`/app/invoices/${invoice.id}`} className="text-accent hover:underline">
+                    {invoice.invoiceNumber || invoice.id}
+                  </Link>,
+                )
+              : field("Type", paymentKindLabel(intent.kind))}
+            {invoice ? field("Invoice status", invoice.status.replace(/_/g, " ")) : null}
+            {invoice ? field("Vendor", invoice.vendor?.name || "—") : null}
+            {invoice ? field("Vendor email", invoice.vendor?.email || "—") : null}
+            {invoice ? field("Issue date", formatDate(invoice.issueDate)) : null}
+            {invoice ? field("Due date", formatDate(invoice.dueDate)) : null}
+            {invoice ? field("Invoice total", formatMoney(invoice.totalAmount, invoice.currency)) : null}
             {field("Pay to", destName || "—")}
             {field(
               "Destination",
@@ -382,7 +391,7 @@ export default async function ReceiptDetailPage({
         )}
       </section>
 
-      {invoice.risks.length ? (
+      {invoice?.risks.length ? (
         <section className="dash-panel dash-panel-flush">
           <div className="dash-panel-head dash-panel-pad">
             <h3 className="dash-h">Risk flags at payment time</h3>

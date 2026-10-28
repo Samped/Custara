@@ -5,7 +5,7 @@ import { ThemeToggle } from "@/components/app/ThemeProvider";
 import { PageAtmosphere } from "@/components/app/GridAtmosphere";
 import { SiteFooter } from "@/components/app/SiteFooter";
 import { getPublicNetworkLedger, NETWORK_LEDGER_PREVIEW } from "@/domain/networkLedger";
-import { formatDate, formatMoney, paymentStatusLabel, shortHash } from "@/lib/format";
+import { formatDate, formatMoney, paymentKindLabel, paymentStatusLabel, shortHash } from "@/lib/format";
 
 export default async function NetworkLedgerPage({
   searchParams,
@@ -64,6 +64,7 @@ export default async function NetworkLedgerPage({
             <thead>
               <tr>
                 <th>When</th>
+                <th>Type</th>
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Verify</th>
@@ -72,7 +73,7 @@ export default async function NetworkLedgerPage({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="dash-empty-cell">
+                  <td colSpan={5} className="dash-empty-cell">
                     No payments recorded yet.
                   </td>
                 </tr>
@@ -80,6 +81,7 @@ export default async function NetworkLedgerPage({
                 rows.map((row) => (
                   <tr key={row.id}>
                     <td className="whitespace-nowrap">{formatDate(row.createdAt)}</td>
+                    <td>{paymentKindLabel(row.kind)}</td>
                     <td className="whitespace-nowrap">{formatMoney(row.amount, row.currency)}</td>
                     <td>{paymentStatusLabel(row.status)}</td>
                     <td>

@@ -19,6 +19,7 @@ export async function getPublicNetworkLedger(options?: { all?: boolean }) {
         mode: true,
         circleTxId: true,
         providerRef: true,
+        kind: true,
       },
     }),
     prisma.paymentIntent.count(),
@@ -36,6 +37,7 @@ export async function getPublicNetworkLedger(options?: { all?: boolean }) {
       onChain,
       txHash: onChain ? intent.txHash : null,
       explorerUrl: onChain && intent.txHash ? arcExplorerTxUrl(intent.txHash) : null,
+      kind: intent.kind || "invoice",
     };
   });
 

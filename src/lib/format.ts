@@ -51,9 +51,36 @@ export function connectorTypeLabel(type: string) {
       return "FIRS e-invoice";
     case "whatsapp_business":
       return "WhatsApp";
+    case "payment_paj":
+      return "PAJ bank";
     default:
       return type.replace(/_/g, " ");
   }
+}
+
+/** Public /network Type column and receipt titles. */
+export function paymentKindLabel(kind?: string | null) {
+  switch (kind) {
+    case "direct":
+      return "Client";
+    case "paj_onramp":
+      return "Bank in";
+    case "paj_offramp":
+      return "Bank out";
+    default:
+      return "Bill";
+  }
+}
+
+export function paymentIntentTitle(intent: {
+  kind?: string | null;
+  invoice?: { invoiceNumber: string | null; id: string } | null;
+  invoiceId?: string | null;
+}) {
+  if (intent.kind === "direct") return "Client payout";
+  if (intent.kind === "paj_onramp") return "Bank fund";
+  if (intent.kind === "paj_offramp") return "Bank withdraw";
+  return intent.invoice?.invoiceNumber || intent.invoiceId?.slice(0, 10) || "Payment";
 }
 
 /** Operator-facing connector status. */

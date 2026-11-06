@@ -1,0 +1,91 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "CUSTARA-SETTINGS",
+  "creation": "2026-11-04 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "api_url",
+    "api_key",
+    "auto_push_on_submit",
+    "settlement_note",
+    "column_break_1",
+    "last_push_status"
+  ],
+  "fields": [
+    {
+      "default": "https://custara.xyz",
+      "description": "Production: https://custara.xyz. Demos: https://testnet.custara.xyz",
+      "fieldname": "api_url",
+      "fieldtype": "Data",
+      "label": "Custara API URL",
+      "reqd": 1
+    },
+    {
+      "description": "Custara Partner API key with invoices:write",
+      "fieldname": "api_key",
+      "fieldtype": "Password",
+      "label": "Partner API key",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "description": "When enabled, submitting a Purchase Invoice pushes it to Custara automatically",
+      "fieldname": "auto_push_on_submit",
+      "fieldtype": "Check",
+      "label": "Auto-push on submit"
+    },
+    {
+      "default": "Arc USDC via Custara (mainnet on custara.xyz; testnet on testnet.custara.xyz)",
+      "fieldname": "settlement_note",
+      "fieldtype": "Data",
+      "label": "Settlement rail",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "last_push_status",
+      "fieldtype": "Small Text",
+      "label": "Last push status",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "issingle": 1,
+  "links": [],
+  "modified": "2026-11-04 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Custara AP",
+  "name": "Custara Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "print": 1,
+      "read": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 0,
+      "email": 0,
+      "print": 0,
+      "read": 1,
+      "role": "Accounts Manager",
+      "share": 0,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

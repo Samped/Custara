@@ -1,0 +1,16 @@
+[project]
+name = "custara_ap"
+authors = [{ name = "Custara", email = "hello@custara.xyz" }]
+description = "Send ERPNext Purchase Invoices to Custara for approval and Arc USDC settlement"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+license = { text = "MIT" }
+dependencies = []
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "custara_ap"

@@ -1,0 +1,4 @@
+include LICENSE
+include README.md
+include MARKETPLACE.md
+recursive-include custara_ap *.json *.js *.md *.png *.py *.txt

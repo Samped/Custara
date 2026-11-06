@@ -1,6 +1,6 @@
 # ERP adapters
 
-Odoo can be connected from **Connectors** in the workspace. Custara pulls posted vendor bills, suppliers, and purchase orders over JSON-RPC, then writes payment back after Arc or Nigeria settlement. Odoo stays the ledger.
+Odoo and ERPNext can be connected from **Connectors** in the workspace. Custara pulls posted vendor bills / Purchase Invoices, suppliers, and purchase orders, then writes payment back after Arc or Nigeria settlement. The ERP stays the ledger.
 
 SAP Business One / S/4HANA and Dynamics 365 Finance / Business Central still normalize through the Partner API.
 
@@ -18,7 +18,7 @@ Idempotency-Key: <stable-erp-document-id>
 }
 ```
 
-`system` is `odoo`, `sap`, or `dynamics`. An ERP that already emits Custara's document shape calls `POST /api/v1/invoices` instead.
+`system` is `odoo`, `erpnext`, `sap`, or `dynamics`. An ERP that already emits Custara's document shape calls `POST /api/v1/invoices` instead.
 
 ## Odoo
 
@@ -42,6 +42,27 @@ Optional Odoo Apps module: [Odoo app](odoo-app.md).
 **Partner API** (middleware or an Odoo addon): `POST /api/v1/erp/ingest` with `system: "odoo"`. Fields: `id`, `name`, `partner_id`, `amount_total`, `currency_id`, `invoice_date_due`, `invoice_date`, `invoice_origin`, `ref`, `invoice_line_ids`.
 
 Production requires HTTPS and a public host for the Odoo URL. `ODOO_ALLOW_HTTP=true` permits HTTP. `ODOO_ALLOW_PRIVATE=true` permits RFC1918 and loopback. Metadata and link-local addresses are always rejected. RPC does not follow redirects. A payment is registered on the Odoo bill at most once per Custara payment intent.
+
+## ERPNext
+
+**Console:** admin pastes the site URL, API key, and API secret (User → API Access). Optional company filter and paid-from Account for Payment Entry. Disconnect removes stored secrets. Connect and Sync pull submitted Purchase Invoices. The worker repeats every minute (incremental by `modified`) and retries failed Payment Entry write-backs every 2 minutes. ERPNext can POST `/api/webhooks/erpnext?token=…` with the connector webhook token to trigger a pull immediately.
+
+**What syncs**
+
+| ERPNext | Custara |
+|---------|---------|
+| `Supplier` | Vendors (`externalId` `erpnext-supplier:{name}`), email, tax id |
+| `Purchase Order` (submitted) | Vendor purchase orders (received % from `per_received`) |
+| `Purchase Invoice` (submitted, incl. returns) | Inbox invoices (`erpnext:{name}` or `erpnext-refund:{name}`), tax totals, outstanding, line items |
+| `File` attachments (metadata) | Audit only on sync |
+
+After a payment settles, Custara creates and submits a **Payment Entry** in the bill currency with remarks/reference `custara:{paymentIntentId}`, allocates against that Purchase Invoice, and skips if already paid or the memo is present. Failed write-backs retry from the worker or **Retry failed write-backs** on Connectors. A failed Custara payment does not mark the ERPNext invoice paid.
+
+Optional Frappe Marketplace app: [Frappe app](frappe-app.md).
+
+**Partner API** (middleware or the Frappe app): `POST /api/v1/erp/ingest` with `system: "erpnext"`. Fields: `name`, `supplier`, `supplier_name`, `grand_total`, `net_total`, `total_taxes_and_charges`, `outstanding_amount`, `currency`, `due_date`, `posting_date`, `bill_no`, `items`, `taxes`, `is_return`.
+
+Production requires HTTPS and a public host. `ERPNEXT_ALLOW_HTTP=true` permits HTTP. `ERPNEXT_ALLOW_PRIVATE=true` permits RFC1918 and loopback (falls back to the Odoo allow flags if unset). Metadata and link-local addresses are always rejected. REST does not follow redirects.
 
 ## SAP
 

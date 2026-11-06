@@ -34,6 +34,7 @@ export async function GET() {
         platform_fee_address_set: Boolean(process.env.PLATFORM_FEE_ADDRESS?.trim()),
         allow_jit_org_creation: process.env.ALLOW_JIT_ORG_CREATION === "true",
         nigeria_payment_live: process.env.NIGERIA_PAYMENT_LIVE === "true",
+        paj_configured: Boolean(process.env.PAJ_API_KEY?.trim()),
         xero_configured: Boolean(process.env.XERO_CLIENT_ID && process.env.XERO_CLIENT_SECRET),
         oidc_configured: Boolean(process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID),
         auth_provider: process.env.AUTH_PROVIDER || "circle",

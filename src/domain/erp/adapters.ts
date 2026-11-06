@@ -256,6 +256,136 @@ export function mapOdooAccountMove(move: {
   };
 }
 
+/** ERPNext Purchase Invoice (REST / webhook) → normalized bill */
+export function mapErpNextPurchaseInvoice(inv: {
+  name?: string;
+  supplier?: string;
+  supplier_name?: string;
+  grand_total?: number;
+  net_total?: number;
+  total?: number;
+  total_taxes_and_charges?: number;
+  outstanding_amount?: number;
+  currency?: string;
+  due_date?: string;
+  posting_date?: string;
+  bill_no?: string;
+  bill_date?: string;
+  remarks?: string;
+  supplier_invoice_no?: string;
+  is_return?: number | boolean;
+  status?: string;
+  docstatus?: number;
+  payment_terms_template?: string;
+  against_purchase_order?: string;
+  items?: Array<{
+    item_code?: string;
+    item_name?: string;
+    description?: string;
+    qty?: number;
+    rate?: number;
+    amount?: number;
+    expense_account?: string;
+    purchase_order?: string;
+  }>;
+  taxes?: Array<{ description?: string; tax_amount?: number; rate?: number }>;
+}): ErpNormalizedBill {
+  const name = String(inv.name || "").trim();
+  const isReturn = Boolean(inv.is_return) || Number(inv.is_return) === 1;
+  const prefix = isReturn ? "erpnext-refund" : "erpnext";
+  const supplierName = (inv.supplier_name || inv.supplier || "").trim() || undefined;
+  const supplierId = (inv.supplier || "").trim();
+  const remarks = (inv.remarks || "").trim();
+  const arcAddress = parseArcAddress(remarks);
+  const paymentMethod = wantsCryptoSettlement({
+    paymentReference: remarks,
+    bankName: null,
+    accountNumber: null,
+    narration: remarks,
+  })
+    ? "crypto"
+    : null;
+
+  const lineItems: NonNullable<ErpNormalizedBill["lineItems"]> = (inv.items || []).map((l) => {
+    const quantity = Number(l.qty ?? 1) || 1;
+    const unitPrice = Number(l.rate ?? 0) || 0;
+    const amount = Number(l.amount ?? quantity * unitPrice) || 0;
+    return {
+      description: (l.description || l.item_name || l.item_code || "").trim() || undefined,
+      quantity,
+      unitPrice,
+      amount,
+      accountCode: l.expense_account || null,
+      analytic: null,
+      product: l.item_code || l.item_name || null,
+    };
+  });
+
+  const taxAmount = Number(inv.total_taxes_and_charges ?? 0) || 0;
+  if (taxAmount > 0) {
+    const taxLabel =
+      (inv.taxes || [])
+        .map((t) => (typeof t.description === "string" ? t.description : ""))
+        .filter(Boolean)
+        .join(", ") || "Tax";
+    lineItems.push({
+      description: taxLabel,
+      quantity: 1,
+      unitPrice: taxAmount,
+      amount: taxAmount,
+      accountCode: null,
+      analytic: null,
+      product: null,
+    });
+  }
+
+  const productTotal = lineItems
+    .filter((l) => l.description !== "Tax")
+    .reduce((sum, l) => sum + (l.amount || 0), 0);
+  const subtotal = Number(inv.net_total ?? inv.total ?? productTotal) || productTotal;
+  const totalAmount = Number(inv.grand_total ?? subtotal + taxAmount) || subtotal + taxAmount;
+  const poFromItems = (inv.items || [])
+    .map((l) => (l.purchase_order || "").trim())
+    .find(Boolean);
+  const poNumber = (inv.against_purchase_order || "").trim() || poFromItems || null;
+
+  const status = (inv.status || "").trim().toLowerCase();
+  const paymentState =
+    status === "paid"
+      ? "paid"
+      : status === "partly paid" || status === "overdue"
+        ? "partial"
+        : status === "unpaid" || status === "submitted"
+          ? "not_paid"
+          : status || null;
+
+  return {
+    externalId: name ? `${prefix}:${name}` : `${prefix}:unknown`,
+    vendorName: supplierName,
+    vendorExternalId: supplierId ? `erpnext-supplier:${supplierId}` : undefined,
+    invoiceNumber: (inv.bill_no || inv.supplier_invoice_no || name || undefined) as
+      | string
+      | undefined,
+    totalAmount,
+    subtotal: Number(inv.net_total ?? subtotal) || subtotal,
+    taxAmount,
+    currency: (inv.currency || "NGN").toUpperCase(),
+    dueDate: inv.due_date || undefined,
+    invoiceDate: inv.bill_date || inv.posting_date || undefined,
+    description: remarks || inv.bill_no || undefined,
+    poNumber,
+    arcAddress,
+    paymentMethod,
+    moveType: isReturn ? "in_refund" : "in_invoice",
+    odooState: inv.docstatus === 1 ? "posted" : inv.docstatus === 0 ? "draft" : null,
+    paymentState,
+    residual: inv.outstanding_amount ?? null,
+    paymentTerm: inv.payment_terms_template || null,
+    lineItems,
+    raw: inv as Record<string, unknown>,
+  };
+}
+
 /** SAP Business One / S/4HANA AP invoice fragment → normalized bill */
 export function mapSapApInvoice(doc: {
   DocEntry?: number | string;
@@ -325,13 +455,19 @@ export function mapDynamicsPurchaseInvoice(inv: {
 }
 
 export function toIngestDocument(system: string, bill: ErpNormalizedBill): Record<string, unknown> {
+  // Mapped fields must win. Spreading ERP raw last overwrote vendor/total for ERPNext
+  // (supplier id vs supplier_name, grand_total vs total_amount) and broke Inbox display.
   return {
     vendor_name: bill.vendorName,
+    supplier_name: bill.vendorName,
     invoice_number: bill.invoiceNumber,
     total_amount: bill.totalAmount,
+    grand_total: bill.totalAmount,
     currency: (bill.currency || "NGN").toUpperCase(),
     due_date: bill.dueDate,
     invoice_date: bill.invoiceDate,
+    issue_date: bill.invoiceDate,
+    posting_date: bill.invoiceDate,
     description: bill.description,
     po_number: bill.poNumber,
     line_items: bill.lineItems,
@@ -345,13 +481,13 @@ export function toIngestDocument(system: string, bill: ErpNormalizedBill): Recor
     payment_state: bill.paymentState,
     amount_residual: bill.residual,
     payment_term: bill.paymentTerm,
-    ...(bill.raw || {}),
+    erp_raw: bill.raw || undefined,
   };
 }
 
 export async function ingestErpBill(input: {
   organizationId: string;
-  system: "odoo" | "sap" | "dynamics";
+  system: "odoo" | "sap" | "dynamics" | "erpnext";
   bill: ErpNormalizedBill;
   sync?: boolean;
   actorType?: "api_key" | "system";

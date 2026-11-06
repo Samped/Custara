@@ -18,7 +18,7 @@ ingest → extract → risk → policy → (approve) → pay timing → payment 
 
 | Area | Details |
 |------|---------|
-| Ingest | Upload, CSV, org ingest email, mailbox webhook, SFTP drop, FIRS e-invoice, Odoo connector, ERP adapters, vendor portal |
+| Ingest | Upload, CSV, org ingest email, mailbox webhook, SFTP drop, FIRS e-invoice, Odoo / ERPNext connectors, ERP adapters, vendor portal |
 | Controls | Versioned policies, maker-checker approvals, MFA above a USD threshold, destination allowlist, spend caps |
 | Money | Arc USDC via Circle agent wallet; Pay client (direct or scheduled); PAJ Fund/Withdraw in NGN, GHS, TZS, KES, ZAR; Nigeria file export unless `NIGERIA_PAYMENT_LIVE` |
 | Audit | Hash-chained events, request IDs, SIEM export |
@@ -178,7 +178,7 @@ curl -s https://custara.xyz/api/v1/invoices \
 
 Full surface: [https://custara.xyz/api/openapi](https://custara.xyz/api/openapi)
 
-ERP shape notes: [docs/erp-adapters.md](docs/erp-adapters.md)
+ERP shape notes: [docs/erp-adapters.md](docs/erp-adapters.md) · Odoo app: [docs/odoo-app.md](docs/odoo-app.md) · Frappe / ERPNext app: [docs/frappe-app.md](docs/frappe-app.md)
 
 ---
 

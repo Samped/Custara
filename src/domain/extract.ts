@@ -207,16 +207,35 @@ function deterministicExtract(payload: Record<string, unknown>): Extraction {
   });
 
   return extractionSchema.parse({
-    vendorName: String(payload.vendor_name || payload.vendorName || payload.vendor || "Unknown Vendor"),
-    invoiceNumber: String(
-      payload.invoice_number || payload.invoiceNumber || payload.number || `INV-${Date.now()}`,
+    vendorName: String(
+      payload.vendor_name ||
+        payload.vendorName ||
+        payload.supplier_name ||
+        payload.supplierName ||
+        payload.vendor ||
+        "Unknown Vendor",
     ),
-    issueDate: (payload.issue_date || payload.issueDate || null) as string | null,
+    invoiceNumber: String(
+      payload.invoice_number ||
+        payload.invoiceNumber ||
+        payload.bill_no ||
+        payload.name ||
+        payload.number ||
+        `INV-${Date.now()}`,
+    ),
+    issueDate: (payload.issue_date ||
+      payload.issueDate ||
+      payload.invoice_date ||
+      payload.posting_date ||
+      payload.bill_date ||
+      null) as string | null,
     dueDate: (payload.due_date || payload.dueDate || null) as string | null,
     currency: String(payload.currency || "NGN"),
-    subtotal: Number(payload.subtotal ?? payload.sub_total ?? 0) || null,
-    taxAmount: Number(payload.tax_amount ?? payload.taxAmount ?? 0) || null,
-    totalAmount: Number(payload.total_amount ?? payload.totalAmount ?? payload.amount ?? 0),
+    subtotal: Number(payload.subtotal ?? payload.sub_total ?? payload.net_total ?? 0) || null,
+    taxAmount: Number(payload.tax_amount ?? payload.taxAmount ?? payload.total_taxes_and_charges ?? 0) || null,
+    totalAmount: Number(
+      payload.total_amount ?? payload.totalAmount ?? payload.grand_total ?? payload.amount ?? 0,
+    ),
     poNumber: (payload.po_number || payload.poNumber || null) as string | null,
     accountName: (payload.account_name || payload.accountName || null) as string | null,
     accountNumber: (payload.account_number || payload.accountNumber || null) as string | null,

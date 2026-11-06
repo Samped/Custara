@@ -218,11 +218,26 @@ export function convertAmount(
   const fromRate = unitsPerUsd(from);
   const toRate = unitsPerUsd(to);
   if (!fromRate || !toRate) {
-    // Unknown pair: return as-is rather than inventing a rate
-    return amount;
+    // Fail closed: never treat unknown FX as 1:1 (₦6000 must not become $6000 for MFA / totals).
+    return 0;
   }
   const inUsd = amount / fromRate;
   return inUsd * toRate;
+}
+
+/** USD (or USDC) equivalent when a live rate exists; null if the pair is not quoted. */
+export function convertAmountOrNull(
+  amount: number,
+  fromCurrency: string | null | undefined,
+  toCurrency: string | null | undefined,
+): number | null {
+  const from = normalizeCurrency(fromCurrency);
+  const to = normalizeCurrency(toCurrency);
+  if (from === to) return amount;
+  const fromRate = unitsPerUsd(from);
+  const toRate = unitsPerUsd(to);
+  if (!fromRate || !toRate) return null;
+  return (amount / fromRate) * toRate;
 }
 
 export function sumInCurrency(

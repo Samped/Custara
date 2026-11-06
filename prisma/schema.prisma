@@ -740,7 +740,7 @@ model WebhookDelivery {
 model IntegrationConnector {
   id             String    @id @default(cuid())
   organizationId String
-  type           String // accounting_xero | accounting_odoo | accounting_csv | payment_nigeria | mailbox_imap | whatsapp_business | sftp_drop | einvoice_firs | banking_* | accounting_qbo | accounting_sage | accounting_zoho
+  type           String // accounting_xero | accounting_odoo | accounting_erpnext | accounting_csv | payment_nigeria | mailbox_imap | whatsapp_business | sftp_drop | einvoice_firs | banking_* | accounting_qbo | accounting_sage | accounting_zoho
   name           String
   status         String    @default("disconnected") // disconnected | connected | error
   configJson     String    @default("{}")

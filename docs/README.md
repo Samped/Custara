@@ -33,8 +33,9 @@ This handbook is the operator and integrator reference.
 Reference:
 
 - [Agent payments](agent-payments.md) — task queue, Circle transfer, reconcile
-- [ERP adapters](erp-adapters.md) — Odoo connector, SAP, and Dynamics field maps
+- [ERP adapters](erp-adapters.md) — Odoo / ERPNext connectors, SAP, and Dynamics field maps
 - [Odoo app](odoo-app.md) — optional Apps module (list after the two-host split)
+- [Frappe / ERPNext app](frappe-app.md) — optional Marketplace app + Connectors pull
 - [Release verification](qa-runbook.md)
 - [SOC 2 readiness](soc2-roadmap.md)
 

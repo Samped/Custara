@@ -3,6 +3,7 @@ import { handlePajWebhookPayload } from "@/domain/banking/pajRails";
 import { pajWebhookSecret, verifyPajWebhook, type PajTransaction } from "@/domain/banking/paj";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();

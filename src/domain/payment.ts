@@ -6,7 +6,6 @@ import { decryptField } from "@/lib/crypto";
 import { putObject } from "@/lib/storage";
 import { enqueueAgentTask } from "@/domain/arc/tasks";
 import { ensureAgentWallet } from "@/domain/arc/wallets";
-import { convertAmount } from "@/lib/currency";
 import { quoteArcSettlement, refreshLiveFxBook } from "@/domain/fx/liveQuote";
 import { assertFiscalUnlocked, invoiceOpenAmount, listOpenVendorCredits } from "@/domain/apLedger";
 import { describePlatformFee } from "@/domain/platformFee";
@@ -174,12 +173,16 @@ export async function createPaymentIntent(input: {
   }
 
   await refreshLiveFxBook();
+  const { quoteArcSettlement } = await import("@/domain/fx/liveQuote");
+  const settlementQuote = await quoteArcSettlement(ledgerPay, invoice.currency);
+  // Only a live quote counts toward the MFA USD threshold — never 1:1 NGN→USD.
+  const amountUsd = settlementQuote.quoted ? settlementQuote.amount : null;
   const { assertPayStepUp } = await import("@/domain/payStepUp");
   await assertPayStepUp({
     organizationId: input.organizationId,
     actorType: input.actorType,
     actorId: input.actorId,
-    amountUsd: convertAmount(ledgerPay, invoice.currency, "USD"),
+    amountUsd,
     mfaCode: input.mfaCode,
     apiStepUpToken: input.apiStepUpToken,
   });
@@ -461,6 +464,14 @@ export async function createPaymentIntent(input: {
     if (updated.status === "exported") {
       const { writeOdooPaymentBack } = await import("@/domain/connectors/odoo");
       await writeOdooPaymentBack({
+        organizationId: input.organizationId,
+        invoiceId: invoice.id,
+        paymentIntentId: intent.id,
+        amount: intent.amount,
+        currency: intent.currency,
+      });
+      const { writeErpNextPaymentBack } = await import("@/domain/connectors/erpnext");
+      await writeErpNextPaymentBack({
         organizationId: input.organizationId,
         invoiceId: invoice.id,
         paymentIntentId: intent.id,

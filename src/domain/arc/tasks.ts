@@ -319,11 +319,12 @@ async function executeArcTransferTask(taskId: string) {
     const initiated = ["INITIATED", "PENDING", "QUEUED", "SENT", "STAGED", "CLEARING"].includes(
       transfer.state.toUpperCase(),
     );
+    const pajBacked = intent.kind === "paj_offramp";
     await prisma.paymentIntent.update({
       where: { id: intent.id },
       data: {
         status: terminal ? "completed" : "pending_transfer",
-        providerRef: transfer.id,
+        providerRef: pajBacked ? intent.providerRef || transfer.id : transfer.id,
         circleTxId: transfer.id,
         txHash: transfer.txHash || null,
         failureReason: null,
@@ -340,6 +341,14 @@ async function executeArcTransferTask(taskId: string) {
     if (terminal && intent.invoiceId) {
       const { writeOdooPaymentBack } = await import("@/domain/connectors/odoo");
       await writeOdooPaymentBack({
+        organizationId: task.organizationId,
+        invoiceId: intent.invoiceId,
+        paymentIntentId: intent.id,
+        amount: intent.amount,
+        currency: intent.currency,
+      });
+      const { writeErpNextPaymentBack } = await import("@/domain/connectors/erpnext");
+      await writeErpNextPaymentBack({
         organizationId: task.organizationId,
         invoiceId: intent.invoiceId,
         paymentIntentId: intent.id,
@@ -416,22 +425,19 @@ export async function retryFailedArcPayment(input: {
   if (!intent) throw new Error("Payment intent not found");
 
   if (input.actorId) {
-    const { convertAmount } = await import("@/lib/currency");
-    const org = await prisma.organization.findUniqueOrThrow({
-      where: { id: input.organizationId },
-      select: { mfaPayThresholdUsd: true },
+    const { convertAmountOrNull } = await import("@/lib/currency");
+    const { assertPayStepUp } = await import("@/domain/payStepUp");
+    // Intent amounts on arc_usdc are already USDC; NGN ledger bills must not 1:1 as USD.
+    const amountUsd =
+      intent.currency === "USDC" || intent.currency === "USD"
+        ? intent.amount
+        : convertAmountOrNull(intent.amount, intent.currency, "USD");
+    await assertPayStepUp({
+      organizationId: input.organizationId,
+      actorType: "user",
+      actorId: input.actorId,
+      amountUsd,
     });
-    const threshold = org.mfaPayThresholdUsd ?? 5000;
-    const amountUsd = convertAmount(intent.amount, intent.currency, "USD");
-    if (amountUsd >= threshold) {
-      const actor = await prisma.workspaceUser.findUniqueOrThrow({ where: { id: input.actorId } });
-      if (!actor.mfaEnabled || !actor.mfaSecretEnc) {
-        const { MFA_SETUP_REQUIRED_CODE } = await import("@/domain/payStepUp");
-        throw new Error(
-          `${MFA_SETUP_REQUIRED_CODE}: Set up MFA before sending payments at or above the organization threshold. Open Security to enable authenticator protection.`,
-        );
-      }
-    }
   }
   if (intent.rail !== "arc_usdc" && intent.rail !== "paj_offramp") {
     throw new Error("Only Arc USDC intents can be retried here");

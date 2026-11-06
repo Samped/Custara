@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   clearFxBookForTests,
   convertAmount,
+  convertAmountOrNull,
   currencyFromCountry,
   resolveDisplayCurrency,
   setFxBookForTests,
@@ -44,7 +45,9 @@ describe("currency helpers", { concurrency: false }, () => {
 
   it("does not invent a naira rate when the live book is empty", () => {
     clearFxBookForTests();
-    assert.equal(convertAmount(1600, "NGN", "USD"), 1600);
+    // Fail closed: never treat ₦ as $1:1 (that falsely tripped MFA at $5k).
+    assert.equal(convertAmount(1600, "NGN", "USD"), 0);
+    assert.equal(convertAmountOrNull(1600, "NGN", "USD"), null);
     assert.equal(settleArcAmount(3000, "NGN").quoted, false);
     assert.equal(settleArcAmount(3000, "NGN").amount, 0);
   });

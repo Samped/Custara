@@ -240,6 +240,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, redirectTo: "/app/connectors?odoo=disconnected" });
     }
 
+    if (action === "save_erpnext") {
+      const url = String(body.url || "").trim();
+      if (!url) {
+        return NextResponse.json({ error: "ERPNext site URL is required." }, { status: 400 });
+      }
+      const { connectErpNext, syncErpNextInbound } = await import("@/domain/connectors/erpnext");
+      await connectErpNext({
+        organizationId: user.organizationId,
+        actorId: user.id,
+        url,
+        apiKey: body.apiKey ? String(body.apiKey) : undefined,
+        apiSecret: body.apiSecret ? String(body.apiSecret) : undefined,
+        company: body.company ? String(body.company) : undefined,
+        paidFromAccount: body.paidFromAccount ? String(body.paidFromAccount) : undefined,
+      });
+      try {
+        await syncErpNextInbound({ organizationId: user.organizationId, actorId: user.id, full: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "ERPNext connected, first sync failed";
+        return NextResponse.json({
+          ok: true,
+          redirectTo: `/app/connectors?erpnext=connected&error=${encodeURIComponent(message.slice(0, 120))}`,
+        });
+      }
+      return NextResponse.json({ ok: true, redirectTo: "/app/connectors?erpnext=synced" });
+    }
+
+    if (action === "sync_erpnext") {
+      const { syncErpNextInbound } = await import("@/domain/connectors/erpnext");
+      const summary = await syncErpNextInbound({
+        organizationId: user.organizationId,
+        actorId: user.id,
+        full: true,
+      });
+      return NextResponse.json({
+        ok: true,
+        redirectTo: `/app/connectors?erpnext=synced&ingested=${summary.ingested}&vendors=${summary.vendors}`,
+      });
+    }
+
+    if (action === "retry_erpnext_writebacks") {
+      const { retryFailedErpNextWritebacks } = await import("@/domain/connectors/erpnext");
+      await retryFailedErpNextWritebacks(user.organizationId);
+      return NextResponse.json({ ok: true, redirectTo: "/app/connectors?erpnext=retry" });
+    }
+
+    if (action === "disconnect_erpnext") {
+      const { disconnectErpNext } = await import("@/domain/connectors/erpnext");
+      await disconnectErpNext({ organizationId: user.organizationId, actorId: user.id });
+      return NextResponse.json({ ok: true, redirectTo: "/app/connectors?erpnext=disconnected" });
+    }
+
     if (action === "save_org") {
       const paymentMode = String(body.paymentMode || "sandbox");
       const nextMode = paymentMode === "live" ? "live" : "sandbox";

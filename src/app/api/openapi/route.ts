@@ -221,9 +221,9 @@ export async function GET() {
       },
       "/api/v1/erp/ingest": {
         post: {
-          summary: "Ingest Odoo / SAP / Dynamics bill",
+          summary: "Ingest Odoo / ERPNext / SAP / Dynamics bill",
           description:
-            "Body { system: odoo|sap|dynamics, payload, sync }. Maps ERP shapes into Custara invoices. Workspaces can also connect Odoo from Connectors and sync over JSON-RPC.",
+            "Body { system: odoo|erpnext|sap|dynamics, payload, sync }. Maps ERP shapes into Custara invoices. Workspaces can also connect Odoo or ERPNext from Connectors.",
           responses: { "201": { description: "Created" } },
         },
       },

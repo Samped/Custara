@@ -17,6 +17,10 @@ import {
   pullRemoteSftpIfConfigured,
 } from "@/domain/sftpIngest";
 import { ensureOdooConnector, listOdooWritebackFailures } from "@/domain/connectors/odoo";
+import {
+  ensureErpNextConnector,
+  listErpNextWritebackFailures,
+} from "@/domain/connectors/erpnext";
 import { getArcChain } from "@/domain/arc/config";
 
 export default async function ConnectorsPage({
@@ -27,6 +31,7 @@ export default async function ConnectorsPage({
     sftp?: string;
     mailbox?: string;
     odoo?: string;
+    erpnext?: string;
     ingested?: string;
     vendors?: string;
   }>;
@@ -61,6 +66,26 @@ export default async function ConnectorsPage({
   };
   const odooFailures = await listOdooWritebackFailures(user.organizationId);
   const odooSecrets = JSON.parse(odoo.secretsJson || "{}") as { apiKeyEnc?: string };
+
+  const erpnext = await ensureErpNextConnector(user.organizationId);
+  const erpnextConfig = JSON.parse(erpnext.configJson || "{}") as {
+    origin?: string;
+    company?: string | null;
+    paidFromAccount?: string | null;
+    lastError?: string | null;
+    truncated?: boolean;
+    lastSyncSummary?: {
+      vendors?: number;
+      ingested?: number;
+      truncated?: boolean;
+    };
+    webhookToken?: string | null;
+  };
+  const erpnextFailures = await listErpNextWritebackFailures(user.organizationId);
+  const erpnextSecrets = JSON.parse(erpnext.secretsJson || "{}") as {
+    apiKeyEnc?: string;
+    apiSecretEnc?: string;
+  };
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: user.organizationId },
@@ -158,6 +183,24 @@ export default async function ConnectorsPage({
       ) : null}
       {params.odoo === "retry" ? (
         <p className="mb-4 text-sm text-accent">Retrying failed Odoo write-backs.</p>
+      ) : null}
+      {params.erpnext === "synced" ? (
+        <p className="mb-4 text-sm text-accent">
+          ERPNext sync finished
+          {params.ingested ? ` · ${params.ingested} bills` : ""}
+          {params.vendors ? ` · ${params.vendors} suppliers` : ""}
+        </p>
+      ) : null}
+      {params.erpnext === "connected" ? (
+        <p className="mb-4 text-sm text-accent">
+          ERPNext connected. Run Sync if the first pull did not finish.
+        </p>
+      ) : null}
+      {params.erpnext === "disconnected" ? (
+        <p className="mb-4 text-sm text-accent">ERPNext disconnected. API credentials were removed.</p>
+      ) : null}
+      {params.erpnext === "retry" ? (
+        <p className="mb-4 text-sm text-accent">Retrying failed ERPNext write-backs.</p>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -341,6 +384,142 @@ export default async function ConnectorsPage({
             <div className="mt-4 rounded-xl border border-line px-3 py-2">
               <p className="text-[0.72rem] font-medium">Failed Odoo write-backs</p>
               {odooFailures.map((row) => (
+                <p key={row.id} className="mt-1 text-[0.7rem] text-muted">
+                  {row.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC · {row.error}
+                </p>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="dash-panel">
+          <h2 className="dash-h">ERPNext</h2>
+          <p className="mt-3 text-[0.78rem] text-muted">
+            ERPNext stays the ledger. Custara is approvals, risk, and Arc{" "}
+            <strong>{getArcChain() === "ARC" ? "mainnet" : "testnet"}</strong> USDC settlement. Dual
+            control and payment MFA live under Controls and Security.
+          </p>
+          <p className="mt-2 text-[0.72rem] text-muted">
+            {erpnext.status === "connected" && erpnextConfig.origin
+              ? `Connected to ${erpnextConfig.origin.replace(/^https?:\/\//, "")}`
+              : "Disconnected"}
+            {erpnext.lastSyncAt
+              ? ` · last sync ${erpnext.lastSyncAt.toISOString().slice(0, 16).replace("T", " ")} UTC`
+              : ""}
+            {erpnextConfig.lastSyncSummary
+              ? ` · ${erpnextConfig.lastSyncSummary.ingested || 0} bills / ${erpnextConfig.lastSyncSummary.vendors || 0} suppliers`
+              : ""}
+          </p>
+          <p className="mt-2 text-[0.72rem] text-muted">
+            Submitted Purchase Invoices are pulled into Inbox about every 15 seconds. You do not need
+            to click Sync. Use Sync now only to force a full refresh.
+          </p>
+          {erpnext.status === "connected" && erpnextConfig.webhookToken ? (
+            <p className="mt-2 break-all text-[0.72rem] text-muted">
+              Instant push (when Custara is on a public URL): in ERPNext create a Webhook on Purchase
+              Invoice submit to{" "}
+              <code>
+                {process.env.APP_URL || "https://your-custara-host"}/api/webhooks/erpnext?token=
+                {erpnextConfig.webhookToken}
+              </code>
+              . Frappe Cloud cannot reach localhost — local testing uses the 15s pull.
+            </p>
+          ) : null}
+          {erpnextConfig.truncated ? (
+            <p className="mt-2 text-[0.72rem] text-warn">
+              Last sync hit the record cap. Older ERPNext rows were skipped — use Sync now after the
+              first pull.
+            </p>
+          ) : null}
+          {erpnextConfig.lastError ? (
+            <p className="mt-2 text-[0.72rem] text-danger">{erpnextConfig.lastError}</p>
+          ) : null}
+          <SettingsJsonForm action="save_erpnext" busyLabel="Connecting…" className="mt-4 grid gap-3">
+            <label className="text-sm">
+              Site URL
+              <input
+                name="url"
+                type="url"
+                inputMode="url"
+                autoComplete="url"
+                className="input mt-1"
+                placeholder="https://your-site.frappe.cloud"
+                defaultValue={erpnextConfig.origin || ""}
+                required
+              />
+              <span className="mt-1 block text-[0.72rem] text-muted">
+                ERPNext / Frappe site origin. Example: https://acme.frappe.cloud
+              </span>
+            </label>
+            <label className="text-sm">
+              Company (optional)
+              <input
+                name="company"
+                className="input mt-1"
+                placeholder="Company name filter"
+                defaultValue={erpnextConfig.company || ""}
+              />
+            </label>
+            <label className="text-sm">
+              Paid-from account (optional)
+              <input
+                name="paidFromAccount"
+                className="input mt-1"
+                placeholder="Bank account for Payment Entry"
+                defaultValue={erpnextConfig.paidFromAccount || ""}
+              />
+            </label>
+            <label className="text-sm">
+              API key
+              <input
+                name="apiKey"
+                type="password"
+                autoComplete="new-password"
+                className="input mt-1"
+                placeholder={erpnextSecrets.apiKeyEnc ? "Leave blank to keep the saved key" : "API key"}
+                required={!erpnextSecrets.apiKeyEnc}
+              />
+            </label>
+            <label className="text-sm">
+              API secret
+              <input
+                name="apiSecret"
+                type="password"
+                autoComplete="new-password"
+                className="input mt-1"
+                placeholder={
+                  erpnextSecrets.apiSecretEnc ? "Leave blank to keep the saved secret" : "API secret"
+                }
+                required={!erpnextSecrets.apiSecretEnc}
+              />
+            </label>
+            <button type="submit" className="btn btn-primary w-fit">
+              Connect
+            </button>
+          </SettingsJsonForm>
+          {erpnext.status === "connected" || erpnext.status === "error" ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <SettingsJsonForm action="sync_erpnext" busyLabel="Syncing…">
+                <button type="submit" className="btn btn-secondary w-fit">
+                  Sync now
+                </button>
+              </SettingsJsonForm>
+              <SettingsJsonForm action="retry_erpnext_writebacks" busyLabel="Retrying…">
+                <button type="submit" className="btn btn-secondary w-fit">
+                  Retry failed write-backs
+                </button>
+              </SettingsJsonForm>
+              <SettingsJsonForm action="disconnect_erpnext" busyLabel="Disconnecting…">
+                <button type="submit" className="btn btn-secondary w-fit">
+                  Disconnect
+                </button>
+              </SettingsJsonForm>
+            </div>
+          ) : null}
+          {erpnextFailures.length ? (
+            <div className="mt-4 rounded-xl border border-line px-3 py-2">
+              <p className="text-[0.72rem] font-medium">Failed ERPNext write-backs</p>
+              {erpnextFailures.map((row) => (
                 <p key={row.id} className="mt-1 text-[0.7rem] text-muted">
                   {row.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC · {row.error}
                 </p>

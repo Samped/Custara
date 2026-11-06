@@ -4,7 +4,6 @@ import { requireSessionUser, canPay } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/app/AppShell";
 import { formatDate, formatMoney, statusBadgeClass } from "@/lib/format";
-import { convertAmount } from "@/lib/currency";
 import { fxSourceLabel, quoteArcSettlement, refreshLiveFxBook } from "@/domain/fx/liveQuote";
 import { formatBuyerPayLine } from "@/domain/platformFee";
 import { arcExplorerTxUrl } from "@/domain/receipts";
@@ -69,12 +68,14 @@ export default async function InvoiceWorkbenchPage({
   });
   await refreshLiveFxBook();
   const payThresholdUsd = org.mfaPayThresholdUsd ?? 5000;
-  const payAmountUsd = convertAmount(invoice.totalAmount || 0, invoice.currency, "USD");
   const quoteSource = invoiceOpenAmount(invoice) || invoice.totalAmount;
   const cryptoQuote =
     quoteSource != null ? await quoteArcSettlement(quoteSource, invoice.currency) : null;
+  // Prefer quoted USDC (≈ USD). MFA only when we have a real FX quote over threshold.
+  const payAmountUsd = cryptoQuote?.quoted ? cryptoQuote.amount : null;
   const networkCopy = arcNetworkCopy(getArcExecutionMode(user.paymentMode));
-  const mfaRequiredForPay = payAmountUsd >= payThresholdUsd;
+  const mfaRequiredForPay =
+    payAmountUsd != null && payAmountUsd >= payThresholdUsd;
 
   const pendingApproval = invoice.approvalRequests.find((a) => a.status === "pending");
   const latestIntent = invoice.paymentIntents[0];

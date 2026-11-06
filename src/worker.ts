@@ -11,6 +11,11 @@ import {
 } from "@/domain/connectors/accountingProviders";
 import { retryFailedOdooWritebacks, syncAllOdooConnectors, syncOdooInbound } from "@/domain/connectors/odoo";
 import {
+  retryFailedErpNextWritebacks,
+  syncAllErpNextConnectors,
+  syncErpNextInbound,
+} from "@/domain/connectors/erpnext";
+import {
   processAllSftpDrops,
   processLocalSftpDrop,
   pullRemoteSftpIfConfigured,
@@ -96,6 +101,34 @@ async function main() {
     if (name === "odoo_writeback") {
       const { writeOdooPaymentBack } = await import("@/domain/connectors/odoo");
       await writeOdooPaymentBack({
+        organizationId: String(payload.organizationId),
+        invoiceId: String(payload.invoiceId),
+        paymentIntentId: String(payload.paymentIntentId),
+        amount: Number(payload.amount),
+        currency: String(payload.currency || "USDC"),
+      });
+      return;
+    }
+    if (name === "sync_erpnext_all") {
+      const summary = await syncAllErpNextConnectors();
+      console.log("[erpnext-sync]", JSON.stringify(summary));
+      return;
+    }
+    if (name === "sync_erpnext_org") {
+      await syncErpNextInbound({
+        organizationId: String(payload.organizationId),
+        skipIfBusy: true,
+      });
+      return;
+    }
+    if (name === "retry_erpnext_writebacks") {
+      const summary = await retryFailedErpNextWritebacks();
+      console.log("[erpnext-writeback-retry]", JSON.stringify(summary));
+      return;
+    }
+    if (name === "erpnext_writeback") {
+      const { writeErpNextPaymentBack } = await import("@/domain/connectors/erpnext");
+      await writeErpNextPaymentBack({
         organizationId: String(payload.organizationId),
         invoiceId: String(payload.invoiceId),
         paymentIntentId: String(payload.paymentIntentId),
@@ -247,6 +280,18 @@ async function main() {
     name: "retry_odoo_writebacks",
     everyMs: 2 * 60_000,
     jobId: "cron-odoo-writeback",
+  });
+  await ensureRepeatableJob({
+    queue: "accounting-sync",
+    name: "sync_erpnext_all",
+    everyMs: 15_000,
+    jobId: "cron-erpnext-sync",
+  });
+  await ensureRepeatableJob({
+    queue: "accounting-sync",
+    name: "retry_erpnext_writebacks",
+    everyMs: 2 * 60_000,
+    jobId: "cron-erpnext-writeback",
   });
 
   console.log("Custara worker ready (BullMQ repeatable crons registered)");

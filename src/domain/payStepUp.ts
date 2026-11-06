@@ -30,7 +30,8 @@ export async function assertPayStepUp(input: {
 
   if (input.actorType === "user") {
     if (!input.actorId) throw new Error("Pay step-up requires actorId");
-    if ((input.amountUsd ?? threshold) < threshold) return;
+    // Missing FX must not coerce to the threshold (that falsely required MFA for ₦ amounts).
+    if (input.amountUsd == null || !(input.amountUsd >= threshold)) return;
     const user = await prisma.workspaceUser.findUniqueOrThrow({ where: { id: input.actorId } });
 
     if (!user.mfaEnabled || !user.mfaSecretEnc) {

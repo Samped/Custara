@@ -6,13 +6,16 @@ import { hashRequestBody, withIdempotency } from "@/lib/idempotency";
 import {
   ingestErpBill,
   mapDynamicsPurchaseInvoice,
+  mapErpNextPurchaseInvoice,
   mapOdooAccountMove,
   mapSapApInvoice,
 } from "@/domain/erp/adapters";
 
+type ErpSystem = "odoo" | "sap" | "dynamics" | "erpnext";
+
 /**
  * Generic ERP ingest endpoint.
- * Body: { system: "odoo"|"sap"|"dynamics", payload: {...}, sync?: boolean }
+ * Body: { system: "odoo"|"sap"|"dynamics"|"erpnext", payload: {...}, sync?: boolean }
  */
 export async function POST(request: Request) {
   try {
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
     await assertRateLimit(`api:${auth.organizationId}:erp`, 60);
     const requestId = request.headers.get("x-request-id") || createRequestId();
     const body = (await request.json()) as {
-      system?: "odoo" | "sap" | "dynamics";
+      system?: ErpSystem;
       payload?: Record<string, unknown>;
       sync?: boolean;
       idempotency_key?: string;
@@ -35,9 +38,13 @@ export async function POST(request: Request) {
         ? mapOdooAccountMove(body.payload as Parameters<typeof mapOdooAccountMove>[0])
         : body.system === "sap"
           ? mapSapApInvoice(body.payload as Parameters<typeof mapSapApInvoice>[0])
-          : mapDynamicsPurchaseInvoice(
-              body.payload as Parameters<typeof mapDynamicsPurchaseInvoice>[0],
-            );
+          : body.system === "erpnext"
+            ? mapErpNextPurchaseInvoice(
+                body.payload as Parameters<typeof mapErpNextPurchaseInvoice>[0],
+              )
+            : mapDynamicsPurchaseInvoice(
+                body.payload as Parameters<typeof mapDynamicsPurchaseInvoice>[0],
+              );
 
     const idempotencyKey = request.headers.get("idempotency-key") || body.idempotency_key || null;
 

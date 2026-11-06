@@ -2,7 +2,7 @@
 
 Connectors is `/app/connectors`. Open it from **Go to → Admin → Connectors**. Only an admin can open it.
 
-Connectors bring bills in or push outcomes to an accounting system. Secrets for mailbox passwords, Odoo API keys, and OAuth tokens are stored encrypted.
+Connectors bring bills in or push outcomes to an accounting system. Secrets for mailbox passwords, Odoo / ERPNext API keys, and OAuth tokens are stored encrypted.
 
 ## Mailbox
 
@@ -31,9 +31,13 @@ Start URLs are `/api/connectors/xero/start` and `/api/connectors/accounting/{pro
 
 **Connectors** stores an Odoo API key (encrypted), optional user email, company, and bank journal. Connect and **Sync now** pull every open vendor bill. The worker repeats that pull every minute, so a posted bill appears in Inbox without clicking Sync. Customer invoices (`INV/…`) are not bills to pay and are not pulled. After Custara pays (USDC on this host’s Arc network), the payment is registered on that Odoo bill and retried if Odoo was down. The buyer-paid Custara fee is not written back. Production Odoo uses API URL `https://custara.xyz`. Demos use `https://testnet.custara.xyz`. Failed write-backs appear on this page. **Disconnect** clears the key. Details: [ERP adapters](erp-adapters.md). Optional [Odoo Apps module](odoo-app.md).
 
+## ERPNext
+
+**Connectors** stores ERPNext site URL plus API key/secret (encrypted), optional company filter, and paid-from Account. Connect and **Sync now** pull submitted Purchase Invoices, suppliers, and purchase orders. The worker repeats that pull every minute. After Custara pays, a Payment Entry is written against that Purchase Invoice (`custara:{paymentIntentId}`) and retried if ERPNext was down. Failed write-backs appear on this page. **Disconnect** clears secrets. Details: [ERP adapters](erp-adapters.md). Optional [Frappe Marketplace app](frappe-app.md).
+
 ## ERP push
 
-SAP and Dynamics, or an Odoo addon that posts itself, use `POST /api/v1/erp/ingest`. Field lists are in [ERP adapters](erp-adapters.md). An ERP that already emits Custara's document shape calls `POST /api/v1/invoices`.
+SAP and Dynamics, or an Odoo / Frappe addon that posts itself, use `POST /api/v1/erp/ingest` (`system`: `odoo` \| `erpnext` \| `sap` \| `dynamics`). Field lists are in [ERP adapters](erp-adapters.md). An ERP that already emits Custara's document shape calls `POST /api/v1/invoices`.
 
 ## WhatsApp
 

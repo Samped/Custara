@@ -281,6 +281,32 @@ export async function applyPolicy(input: {
   const rules = active?.rules || (await loadPolicyRules(input.organizationId));
   const base = evaluatePolicy({ ...input, rules });
 
+  const current = await prisma.invoice.findUnique({
+    where: { id: input.invoiceId },
+    select: { status: true },
+  });
+  // Re-sync / re-extract must not undo an approval or payment already in flight.
+  const protectedStatus = new Set([
+    "approved",
+    "payment_queued",
+    "payment_sent",
+    "reconciled",
+    "settled",
+    "rejected",
+    "void",
+    "payment_failed",
+  ]);
+  if (current && protectedStatus.has(current.status)) {
+    return {
+      ...base,
+      decision: base.decision,
+      nextStatus: current.status as PolicyResult["nextStatus"],
+      reason: base.reason,
+      policyVersion: active?.version.version ?? null,
+      policyId: active?.policy.id ?? null,
+    };
+  }
+
   await prisma.invoice.update({
     where: { id: input.invoiceId },
     data: {
